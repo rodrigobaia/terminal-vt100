@@ -1,0 +1,108 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>TerminalVT100</name>
+    </assembly>
+    <members>
+        <member name="T:TerminalVT100.TedVT100Server">
+            <summary>
+            Servidor Terminal VT 100
+            </summary>
+        </member>
+        <member name="E:TerminalVT100.TedVT100Server.ClientDataReceived">
+            <summary>
+            Evento que informa a existe de dados enviados pelo o Terminal para o servidor TEDVT100
+            </summary>
+        </member>
+        <member name="E:TerminalVT100.TedVT100Server.ClientConnected">
+            <summary>
+            Evento que informa a conexão de um terminal no servidor TEDVT100
+            </summary>
+        </member>
+        <member name="M:TerminalVT100.TedVT100Server.#ctor">
+            <summary>
+            Construtor
+            </summary>
+        </member>
+        <member name="M:TerminalVT100.TedVT100Server.Start(System.Int32)">
+            <summary>
+            Inicia o Servidor
+            </summary>
+            <param name="portNumber"></param>
+        </member>
+        <member name="M:TerminalVT100.TedVT100Server.SendMessage(System.String,System.String,System.Boolean)">
+            <param name="message">Mensagem a ser enviada</param>
+            <param name="breakLine">Informa se é para quebrar linha no fim da mensagem</param>
+        </member>
+        <member name="M:TerminalVT100.TedVT100Server.ClearDisplay(System.String)">
+            <summary>
+            Limpa o Display
+            </summary>
+        </member>
+        <member name="M:TerminalVT100.TedVT100Server.ClearDisplayAsync(System.String)">
+            <summary>
+            Limpa o Display
+            </summary>
+            <param name="ip">IP do Terminal</param>
+            <returns></returns>
+        </member>
+        <member name="M:TerminalVT100.TedVT100Server.SendMessageAsync(System.String,System.String,System.Boolean)">
+            <param name="message">Mensagem a ser enviada</param>
+            <param name="breakLine">Informa se é para quebrar linha no fim da mensagem</param>
+            <returns></returns>
+        </member>
+        <member name="M:TerminalVT100.TedVT100Server.EnabledCOM1(System.String)">
+            <summary>
+            Habilitar porta COM 1
+            </summary>
+            <param name="ip">IP do Terminal</param>
+        </member>
+        <member name="M:TerminalVT100.TedVT100Server.EnabledCOM1Async(System.String)">
+            <returns></returns>
+        </member>
+        <member name="M:TerminalVT100.TedVT100Server.EnabledCOM2(System.String)">
+            <summary>
+            Habilitar porta COM 2
+            </summary>
+        </member>
+        <member name="M:TerminalVT100.TedVT100Server.EnabledCOM2Async(System.String)">
+            <returns></returns>
+        </member>
+        <member name="M:TerminalVT100.TedVT100Server.Dispose">
+            <summary>
+            Dispose do Objeto
+            </summary>
+        </member>
+        <member name="M:TerminalVT100.TedVT100Server.Dispose(System.Boolean)">
+            <summary>
+            
+            </summary>
+            <param name="disposing"></param>
+        </member>
+        <member name="M:TerminalVT100.TedVT100Server.BuscarIpCorrente">
+            <summary>
+            Buscar o endereço IP corrente da máquina.
+            </summary>
+            <returns>O endereço IP corrente, ou string vazia se não encontrado.</returns>
+        </member>
+        <member name="M:TerminalVT100.TedVT100Server.GetDefaultGatewayAddress">
+            <summary>
+            Busca o gateway padrão.
+            </summary>
+            <returns>O endereço IP do gateway padrão, ou string vazia se não encontrado.</returns>
+        </member>
+        <member name="M:TerminalVT100.TedVT100Server.GetLocalIPAddresses">
+            <summary>
+            Busca todos os endereços de IP locais da máquina.
+            </summary>
+            <returns>Um array contendo os endereços de IP locais.</returns>
+        </member>
+        <member name="M:TerminalVT100.TedVT100Server.IsConnectedToInternet(System.String)">
+            <summary>
+            Verifica se há conexão com a internet em um determinado endereço IP.
+            </summary>
+            <param name="ipAddress">O endereço IP a ser verificado.</param>
+            <returns>True se há conexão com a internet, caso contrário, False.</returns>
+        </member>
+    </members>
+</doc>

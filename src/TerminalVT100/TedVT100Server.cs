@@ -25,11 +25,21 @@ namespace TerminalVT100
         private ConcurrentDictionary<string, TcpClient> _connectedClients;
         private ConcurrentDictionary<string, StringBuilder> _receiveDatas;
 
+        /// <summary>
+        /// Evento que informa a existe de dados enviados pelo o Terminal para o servidor TEDVT100
+        /// </summary>
         public event Action<string, string> ClientDataReceived;
+
+        /// <summary>
+        /// Evento que informa a conexão de um terminal no servidor TEDVT100
+        /// </summary>
         public event Action<string> ClientConnected;
 
         private bool _disposed = false;
 
+        /// <summary>
+        /// Construtor
+        /// </summary>
         public TedVT100Server()
         {
             InitializeLogger();
@@ -59,6 +69,10 @@ namespace TerminalVT100
                 .CreateLogger();
         }
 
+        /// <summary>
+        /// Inicia o Servidor
+        /// </summary>
+        /// <param name="portNumber"></param>
         public void Start(int portNumber = 1001)
         {
             _portNumber = portNumber;
@@ -80,8 +94,15 @@ namespace TerminalVT100
         {
             while (true)
             {
-                TcpClient client = await _server.AcceptTcpClientAsync();
-                Task.Run(() => HandleClientAsync(client));
+                try
+                {
+                    TcpClient client = await _server.AcceptTcpClientAsync();
+                    Task.Run(() => HandleClientAsync(client));
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error(ex, "AcceptClientsAsync");
+                }
             }
         }
 
@@ -140,19 +161,28 @@ namespace TerminalVT100
         /// <summary>
         /// Enviar Mensagem
         /// </summary>
-        /// <param name="ip"></param>
-        /// <param name="message"></param>
-        /// <param name="breakLine"></param>
+        // <param name="ip">IP do Terminal</param>
+        /// <param name="message">Mensagem a ser enviada</param>
+        /// <param name="breakLine">Informa se é para quebrar linha no fim da mensagem</param>
         public async void SendMessage(string ip, string message, bool breakLine = true)
         {
             SendMessageAsync(ip, message, breakLine);
         }
 
+        /// <summary>
+        /// Limpa o Display
+        /// </summary>
+        // <param name="ip">IP do Terminal</param>
         public void ClearDisplay(string ip)
         {
             ClearDisplayAsync(ip);
         }
 
+        /// <summary>
+        /// Limpa o Display
+        /// </summary>
+        /// <param name="ip">IP do Terminal</param>
+        /// <returns></returns>
         public async Task ClearDisplayAsync(string ip)
         {
             if (!_connectedClients.TryGetValue(ip, out TcpClient client))
@@ -173,6 +203,13 @@ namespace TerminalVT100
             }
         }
 
+        /// <summary>
+        /// Envia mensagem para o Terminal
+        /// </summary>
+        // <param name="ip">IP do Terminal</param>
+        /// <param name="message">Mensagem a ser enviada</param>
+        /// <param name="breakLine">Informa se é para quebrar linha no fim da mensagem</param>
+        /// <returns></returns>
         public async Task SendMessageAsync(string ip, string message, bool breakLine = true)
         {
             if (!_connectedClients.TryGetValue(ip, out TcpClient client))
@@ -207,6 +244,11 @@ namespace TerminalVT100
             EnabledCOM1Async(ip);
         }
 
+        /// <summary>
+        /// /// Habilitar porta COM 1
+        /// </summary>
+        // <param name="ip">IP do Terminal</param>
+        /// <returns></returns>
         public async Task EnabledCOM1Async(string ip)
         {
             if (!_connectedClients.TryGetValue(ip, out TcpClient client))
@@ -227,11 +269,20 @@ namespace TerminalVT100
             }
         }
 
+        /// <summary>
+        /// Habilitar porta COM 2
+        /// </summary>
+        // <param name="ip">IP do Terminal</param>
         public void EnabledCOM2(string ip)
         {
             EnabledCOM2Async(ip);
         }
 
+        /// <summary>
+        /// Habilitar porta COM 2
+        /// </summary>
+        // <param name="ip">IP do Terminal</param>
+        /// <returns></returns>
         public async Task EnabledCOM2Async(string ip)
         {
             if (!_connectedClients.TryGetValue(ip, out TcpClient client))
@@ -252,12 +303,19 @@ namespace TerminalVT100
             }
         }
 
+        /// <summary>
+        /// Dispose do Objeto
+        /// </summary>
         public void Dispose()
         {
             Dispose(true);
             GC.SuppressFinalize(this);
         }
 
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="disposing"></param>
         protected virtual void Dispose(bool disposing)
         {
             if (!_disposed)
