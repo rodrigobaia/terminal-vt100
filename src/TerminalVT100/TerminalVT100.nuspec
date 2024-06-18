@@ -9,11 +9,11 @@
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
     <license type="expression">MIT</license>
     <projectUrl>https://github.com/rodrigobaia/terminal-vt100/</projectUrl>
-    <iconUrl>http://icon_url_here_or_delete_this_line/</iconUrl>
+    <iconUrl>https://github.com/rodrigobaia/terminal-vt100/blob/main/images/terminal-32x32.png</iconUrl>
     <description>Bilbioteca responsável em criar um servidor TCP para comunicação com Mini-Terminal usando protocolo VP100.</description>
     <releaseNotes>Summary of changes made in this release of the package.</releaseNotes>
     <copyright>Copyright 2024</copyright>
-    <tags>Tag1 Tag2</tags>
+    <tags>Start SendMessage ClearDisplay</tags>
 	  <dependencies>
 		  <dependency id="Serilog" version="4.0.0" />
 		  <dependency id="Serilog.Sinks.Console" version="6.0.0" />
