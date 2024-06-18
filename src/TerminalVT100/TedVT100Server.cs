@@ -1,15 +1,15 @@
 ﻿using Serilog;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
+using System.Text;
 using System.Text.RegularExpressions;
-using System.Threading;
 using System.Threading.Tasks;
 
 namespace TerminalVT100
@@ -17,21 +17,26 @@ namespace TerminalVT100
     /// <summary>
     /// Servidor Terminal VT 100
     /// </summary>
-    public class TedVT100Server: IDisposable
+    public class TedVT100Server : IDisposable
     {
         private ILogger _logger;
-
-        private TcpListener server;
-        private BackgroundWorker backgroundWorker;
+        private TcpListener _server;
         private int _portNumber;
+        private ConcurrentDictionary<string, TcpClient> _connectedClients;
+        private ConcurrentDictionary<string, StringBuilder> _receiveDatas;
 
-        private Dictionary<string, NetworkStream> terminais;
+        public event Action<string, string> ClientDataReceived;
+        public event Action<string> ClientConnected;
 
-        public delegate void ClientDataReceivedEventHandler(string ip, string data);
-        public event ClientDataReceivedEventHandler ClientDataReceived;
-        private bool disposedValue;
+        private bool _disposed = false;
 
         public TedVT100Server()
+        {
+            InitializeLogger();
+            _connectedClients = new ConcurrentDictionary<string, TcpClient>();
+        }
+
+        private void InitializeLogger()
         {
             var path = AppDomain.CurrentDomain.BaseDirectory;
             var pathLog = Path.Combine(path, "logs");
@@ -44,264 +49,152 @@ namespace TerminalVT100
             var fileFull = Path.Combine(pathLog, "terminal-vt100.log");
 
             _logger = new LoggerConfiguration()
-               .MinimumLevel.Debug()
-               .WriteTo.File(fileFull, rollingInterval: RollingInterval.Day, outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}")
+                .MinimumLevel.Debug()
+                .WriteTo.File(fileFull, rollingInterval: RollingInterval.Day, outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}")
 #if DEBUG
                 .WriteTo.Console(Serilog.Events.LogEventLevel.Verbose)
 #else
-               .WriteTo.Console(Serilog.Events.LogEventLevel.Error)
+                .WriteTo.Console(Serilog.Events.LogEventLevel.Error)
 #endif
                 .CreateLogger();
-
-            backgroundWorker = new BackgroundWorker();
-            backgroundWorker.DoWork += BackgroundWorker_DoWork;
-            backgroundWorker.WorkerSupportsCancellation = true;
         }
 
-        private void BackgroundWorker_DoWork(object sender, DoWorkEventArgs e)
-        {
-            StartServer();
-        }
-
-        /// <summary>
-        /// Iniciar Servidor
-        /// </summary>
-        private async void StartServer()
-        {
-            IPAddress localAddr = IPAddress.Any;
-
-            server = new TcpListener(localAddr, _portNumber);
-            server.Start();
-
-            while (!backgroundWorker.CancellationPending)
-            {
-                try
-                {
-                    TcpClient client = await server.AcceptTcpClientAsync();
-                    // Processar a conexão em uma nova tarefa
-                    Task.Run(() => HandleClient(client));
-                }
-                catch (Exception ex)
-                {
-                    _logger.Error(ex, "TedVT100 - BackgroundWorker_DoWork");
-                }
-            }
-        }
-
-        private async Task HandleClient(TcpClient client)
-        {
-            /* Obtendo o IP do cliente */
-            IPEndPoint ipEndPoint = (IPEndPoint)client.Client.RemoteEndPoint;
-            var ip = ipEndPoint.Address.ToString();
-
-            if (!terminais.TryGetValue(ip, out NetworkStream networkStream))
-            {
-                terminais.Add(ip, networkStream);
-            }
-
-            NetworkStream stream = client.GetStream();
-            byte[] buffer = new byte[1024];
-            int i;
-            string entrada = "";
-
-            while ((i = stream.Read(buffer, 0, buffer.Length)) != 0)
-            {
-                string data = null;
-                try
-                {
-                    data = System.Text.Encoding.ASCII.GetString(buffer, 0, i);
-
-                    if (data.Contains("\r"))
-                    {
-                        data = data.Replace("\r", "");
-                        entrada += data;
-                        break;
-                    }
-                    else if (data.Length > 2)
-                    {
-                        entrada += data;
-                    }
-                    else if (Convert.ToChar(data) != Convert.ToChar(13))
-                    {
-                        entrada += data;
-                    }
-                    else
-                    {
-                        break;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _logger.Error(ex, "TedVT100 - HandleClient");
-                }
-            }
-
-            // Disparar o evento com os dados recebidos
-            OnClientDataReceived(ip, entrada);
-        }
-
-        protected virtual void OnClientDataReceived(string ip, string data)
-        {
-            ClientDataReceived?.Invoke(ip, data);
-        }
-
-        /// <summary>
-        /// Iniciar o Servidor
-        /// </summary>
-        /// <param name="portNumber">Número da Porta de Acesso</param>
         public void Start(int portNumber = 1001)
         {
-            try
+            _portNumber = portNumber;
+            string ipCurrent = BuscarIpCorrente();
+
+            if (string.IsNullOrEmpty(ipCurrent))
             {
-                terminais = new Dictionary<string, NetworkStream>();
-                _portNumber = portNumber;
-                // Inicia o BackgroundWorker
-                backgroundWorker.RunWorkerAsync();
-            }
-            catch (Exception ex)
-            {
-                _logger.Error(ex, "TedVT100 - Start");
-                throw;
+                _logger.Error("Failed to determine current IP address. Server cannot start.");
+                return;
             }
 
+            _server = new TcpListener(IPAddress.Parse(ipCurrent), _portNumber);
+            _server.Start();
+
+            Task.Run(() => AcceptClientsAsync());
         }
 
-        /// <summary>
-        /// Parar Servidor
-        /// </summary>
-        public void Stop()
+        private async Task AcceptClientsAsync()
         {
+            while (true)
+            {
+                TcpClient client = await _server.AcceptTcpClientAsync();
+                Task.Run(() => HandleClientAsync(client));
+            }
+        }
+
+        private async Task HandleClientAsync(TcpClient client)
+        {
+            IPEndPoint endPoint = (IPEndPoint)client.Client.RemoteEndPoint;
+            string clientIp = endPoint.Address.ToString();
+
+            _connectedClients.TryAdd(clientIp, client);
+            ClientConnected?.Invoke(clientIp);
+
             try
             {
-                // Cancela o BackgroundWorker
-                if (backgroundWorker.IsBusy)
+                using (NetworkStream stream = client.GetStream())
                 {
-                    backgroundWorker.CancelAsync();
-                }
+                    byte[] buffer = new byte[1024];
+                    StringBuilder messageBuilder = new StringBuilder();
 
-                // Para o servidor TCP
-                server.Stop();
+                    while (true)
+                    {
+                        int bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length);
+                        if (bytesRead == 0)
+                            break;
+
+                        string data = Encoding.ASCII.GetString(buffer, 0, bytesRead);
+                        messageBuilder.Append(data);
+
+                        if (_receiveDatas == null)
+                        {
+                            _receiveDatas = new ConcurrentDictionary<string, StringBuilder>();
+                        }
+
+                        _receiveDatas[clientIp] = messageBuilder;
+
+                        await SendMessageAsync(clientIp, data, false);
+                        if (data.Contains("\r"))
+                        {
+                            string receivedData = _receiveDatas[clientIp].ToString().Replace("\r", "");
+                            ClientDataReceived?.Invoke(clientIp, receivedData);
+                            break;
+                        }
+                    }
+                }
             }
             catch (Exception ex)
             {
-                _logger.Error(ex, "TedVT100 - Stop");
-                throw;
+                _logger.Error(ex, "Error handling client.");
+            }
+            finally
+            {
+                client.Close();
+                _connectedClients.TryRemove(clientIp, out _);
             }
         }
 
         /// <summary>
-        /// Limpar Display
+        /// Enviar Mensagem
         /// </summary>
-        /// <param name="ip">IP do Terminal</param>
+        /// <param name="ip"></param>
+        /// <param name="message"></param>
+        /// <param name="breakLine"></param>
+        public async void SendMessage(string ip, string message, bool breakLine = true)
+        {
+            SendMessageAsync(ip, message, breakLine);
+        }
+
         public void ClearDisplay(string ip)
         {
+            ClearDisplayAsync(ip);
+        }
+
+        public async Task ClearDisplayAsync(string ip)
+        {
+            if (!_connectedClients.TryGetValue(ip, out TcpClient client))
+            {
+                _logger.Warning($"Client not found: {ip}");
+                return;
+            }
+
             try
             {
-                if (!terminais.TryGetValue(ip, out NetworkStream networkStream))
+                string message = $"{(char)27}[H{(char)27}[J";
+                byte[] data = Encoding.ASCII.GetBytes(message);
+                await client.GetStream().WriteAsync(data, 0, data.Length);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, $"Clear Display to client {ip}");
+            }
+        }
+
+        public async Task SendMessageAsync(string ip, string message, bool breakLine = true)
+        {
+            if (!_connectedClients.TryGetValue(ip, out TcpClient client))
+            {
+                _logger.Warning($"Client not found: {ip}");
+                return;
+            }
+
+            try
+            {
+                if (breakLine)
                 {
-                    _logger.Warning($"ClearDisplay - Terminal not found - [{ip}].");
-                    return;
+                    // Adiciona uma quebra de linha ao final da mensagem
+                    message += "\r\n";  // Ou apenas "\n" dependendo do requisito VT100
                 }
 
-                string cmdClear = Convert.ToChar(27) + "[?24h" + Convert.ToChar(27) + "[5i" + "#27'[H'#27'[J'" + Convert.ToChar(27) + "[4i";
-                byte[] msgs = System.Text.Encoding.ASCII.GetBytes(cmdClear);
-                networkStream.Write(msgs, 0, cmdClear.Length);
-                networkStream.Dispose();
+                byte[] data = Encoding.ASCII.GetBytes(message);
+                await client.GetStream().WriteAsync(data, 0, data.Length);
             }
             catch (Exception ex)
             {
-                _logger.Error(ex, "TedVT100 - ClearDisplay");
-            }
-        }
-
-        /// <summary>
-        /// Enviar messagem para o Terminal
-        /// </summary>
-        /// <param name="ip">IP do Terminal</param>
-        /// <param name="msg">Mensagem a ser enviada</param>
-        public void SendMessage(string ip, string msg)
-        {
-            try
-            {
-                if (!terminais.TryGetValue(ip, out NetworkStream networkStream))
-                {
-                    _logger.Warning($"SendMessage - Terminal not found - [{ip}].");
-                    return;
-                }
-
-                var comando = ((char)2).ToString() + 'D' + msg + ((char)3).ToString();
-
-                byte[] msgs = System.Text.Encoding.ASCII.GetBytes(comando);
-                networkStream.Write(msgs, 0, msgs.Length);
-                networkStream.Dispose();
-            }
-            catch (Exception ex)
-            {
-                _logger.Error(ex, "TedVT100 - SendMessage");
-            }
-        }
-
-        /// <summary>
-        /// Envar Beep
-        /// </summary>
-        /// <param name="ip">IP do Terminal</param>
-        /// <param name="timeBeep">Tempo do Beep em milisegundos</param>
-        public void Beep(string ip, int timeBeep = 200)
-        {
-            try
-            {
-                if (!terminais.TryGetValue(ip, out NetworkStream networkStream))
-                {
-                    _logger.Warning($"Beep - Terminal not found - [{ip}].");
-                    return;
-                }
-
-                BeepOn(networkStream);
-                Thread.Sleep(timeBeep);
-                BeepOff(networkStream);
-            }
-            catch (Exception ex)
-            {
-                _logger.Error(ex, "TedVT100 - Beep");
-            }
-        }
-
-        /// <summary>
-        /// Ligar Beep
-        /// </summary>
-        /// <param name="networkStream"></param>
-        private void BeepOn(NetworkStream networkStream)
-        {
-            try
-            {
-                // Buzzer
-                var acionamentoChar = (char)7;
-                var comando = $"{(char)27}[?24c{(char)27}[5i{acionamentoChar}{(char)27}[4i";
-                byte[] msgs = System.Text.Encoding.ASCII.GetBytes(comando);
-                networkStream.Write(msgs, 0, msgs.Length);
-            }
-            catch (Exception ex)
-            {
-                _logger.Error(ex, "TedVT100 - BeepOn");
-            }
-        }
-
-        /// <summary>
-        /// Desliga Beep
-        /// </summary>
-        /// <param name="networkStream"></param>
-        private void BeepOff(NetworkStream networkStream)
-        {
-            try
-            {
-                var acionamentoChar = (char)11;
-                var comando = $"{(char)27}[?24c{(char)27}[5i{acionamentoChar}{(char)27}[4i";
-                byte[] msgs = System.Text.Encoding.ASCII.GetBytes(comando);
-                networkStream.Write(msgs, 0, msgs.Length);
-            }
-            catch (Exception ex)
-            {
-                _logger.Error(ex, "TedVT100 - BeepOff");
+                _logger.Error(ex, $"Error sending message to client {ip}");
             }
         }
 
@@ -311,57 +204,84 @@ namespace TerminalVT100
         /// <param name="ip">IP do Terminal</param>
         public void EnabledCOM1(string ip)
         {
+            EnabledCOM1Async(ip);
+        }
+
+        public async Task EnabledCOM1Async(string ip)
+        {
+            if (!_connectedClients.TryGetValue(ip, out TcpClient client))
+            {
+                _logger.Warning($"Client not found: {ip}");
+                return;
+            }
+
             try
             {
-                if (!terminais.TryGetValue(ip, out NetworkStream networkStream))
-                {
-                    _logger.Warning($"EnabledCOM1 - Terminal not found - [{ip}].");
-                    return;
-                }
-                var comando = ((char)13).ToString() + ((char)10).ToString();
-                var msg = ((char)27).ToString() + "[?24r" + ((char)27).ToString() + "[5i" + comando + ((char)27).ToString() + "[4i";
-                byte[] msgs = System.Text.Encoding.ASCII.GetBytes(msg);
-                networkStream.Write(msgs, 0, msg.Length);
-                networkStream.Dispose();
-
+                string message = $"{(char)27}[H{(char)27}[J";
+                byte[] data = Encoding.ASCII.GetBytes(message);
+                await client.GetStream().WriteAsync(data, 0, data.Length);
             }
             catch (Exception ex)
             {
-                _logger.Error(ex, "TedVT100 - EnabledCOM1");
+                _logger.Error(ex, $"Error Enable Port Com 1 to client {ip}");
             }
         }
 
-        /// <summary>
-        /// Habilitar porta COM 1
-        /// </summary>
-        /// <param name="ip">IP do Terminal</param>
         public void EnabledCOM2(string ip)
         {
+            EnabledCOM2Async(ip);
+        }
+
+        public async Task EnabledCOM2Async(string ip)
+        {
+            if (!_connectedClients.TryGetValue(ip, out TcpClient client))
+            {
+                _logger.Warning($"Client not found: {ip}");
+                return;
+            }
+
             try
             {
-                if (!terminais.TryGetValue(ip, out NetworkStream networkStream))
-                {
-                    _logger.Warning($"EnabledCOM2 - Terminal not found - [{ip}].");
-                    return;
-                }
-
-                var comando = ((char)13).ToString() + ((char)10).ToString();
-                var msg = ((char)27).ToString() + "[?24h" + ((char)27).ToString() + "[5i" + comando + ((char)27).ToString() + "[4i";
-                byte[] msgs = System.Text.Encoding.ASCII.GetBytes(msg);
-                networkStream.Write(msgs, 0, msg.Length);
-                networkStream.Dispose();
+                string message = $"{(char)27}[H{(char)27}[J";
+                byte[] data = Encoding.ASCII.GetBytes(message);
+                await client.GetStream().WriteAsync(data, 0, data.Length);
             }
             catch (Exception ex)
             {
-                _logger.Error(ex, "TedVT100 - EnabledCOM2");
+                _logger.Error(ex, $"Error Enable Port Com 2 to client {ip}");
+            }
+        }
+
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!_disposed)
+            {
+                if (disposing)
+                {
+                    _server.Stop();
+                    foreach (var client in _connectedClients.Values)
+                    {
+                        client.Close();
+                        client.Dispose();
+                    }
+                    _connectedClients.Clear();
+                }
+
+                _disposed = true;
             }
         }
 
         /// <summary>
-        /// Buscar IpCorrente
+        /// Buscar o endereço IP corrente da máquina.
         /// </summary>
-        /// <returns></returns>
-        public string BuscarIpCorrente()
+        /// <returns>O endereço IP corrente, ou string vazia se não encontrado.</returns>
+        private string BuscarIpCorrente()
         {
             string gatewayAddress = GetDefaultGatewayAddress();
             string[] ipAddresses = GetLocalIPAddresses();
@@ -378,7 +298,6 @@ namespace TerminalVT100
                     {
                         ipLocal.Add(ipAddress);
                         break;
-
                     }
                 }
             }
@@ -392,9 +311,9 @@ namespace TerminalVT100
         }
 
         /// <summary>
-        /// Buscando Geateway padrão
+        /// Busca o gateway padrão.
         /// </summary>
-        /// <returns></returns>
+        /// <returns>O endereço IP do gateway padrão, ou string vazia se não encontrado.</returns>
         private string GetDefaultGatewayAddress()
         {
             Process process = new Process();
@@ -427,9 +346,9 @@ namespace TerminalVT100
         }
 
         /// <summary>
-        /// Buscando todos endereços de IP Servidor
+        /// Busca todos os endereços de IP locais da máquina.
         /// </summary>
-        /// <returns></returns>
+        /// <returns>Um array contendo os endereços de IP locais.</returns>
         private string[] GetLocalIPAddresses()
         {
             string hostName = System.Net.Dns.GetHostName();
@@ -446,10 +365,10 @@ namespace TerminalVT100
         }
 
         /// <summary>
-        /// Tem conexão com a Internet
+        /// Verifica se há conexão com a internet em um determinado endereço IP.
         /// </summary>
-        /// <param name="ipAddress">Endereço de IP</param>
-        /// <returns></returns>
+        /// <param name="ipAddress">O endereço IP a ser verificado.</param>
+        /// <returns>True se há conexão com a internet, caso contrário, False.</returns>
         private bool IsConnectedToInternet(string ipAddress)
         {
             using (Ping ping = new Ping())
@@ -458,10 +377,6 @@ namespace TerminalVT100
                 {
                     PingReply reply = ping.Send(ipAddress, 1000);
                     return (reply.Status == IPStatus.Success);
-                    if (reply.Status == IPStatus.Success)
-                    {
-                        return true;
-                    }
                 }
                 catch (PingException)
                 {
@@ -470,30 +385,6 @@ namespace TerminalVT100
 
                 return false;
             }
-        }
-
-        protected virtual void Dispose(bool disposing)
-        {
-            if (!disposedValue)
-            {
-                if (disposing)
-                {
-                    server?.Stop();
-                    backgroundWorker?.Dispose();
-                    foreach (var stream in terminais.Values)
-                    {
-                        stream.Dispose();
-                    }
-                    terminais.Clear();
-                }
-                disposedValue = true;
-            }
-        }
-
-        public void Dispose()
-        {
-            Dispose(disposing: true);
-            GC.SuppressFinalize(this);
         }
     }
 }
