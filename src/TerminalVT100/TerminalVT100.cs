@@ -129,6 +129,10 @@ namespace TerminalVT100
                             continue;
 
                         string data = Encoding.ASCII.GetString(buffer, 0, bytesRead);
+                        if (_receiveDatas == null)
+                        {
+                            _receiveDatas = new ConcurrentDictionary<string, StringBuilder>();
+                        }
 
                         if (Convert.ToChar(data) == (char)8)
                         {
@@ -139,30 +143,29 @@ namespace TerminalVT100
                             var len = messageBuilder.Length;
                             var str = messageBuilder.Remove(len - 1, 1);
                             messageBuilder = str;
+
+                            await SendMessageAsync(clientIp, ((char)8).ToString() + " " + ((char)8).ToString(), false);
+                            _receiveDatas[clientIp] = messageBuilder;
+                            continue;
                         }
                         if (Convert.ToChar(data) == (char)127 || Convert.ToChar(data) == (char)27)
                         {
                             await SendMessageAsync(clientIp, "\x1B[H\x1B[J", false);
                             continue;
                         }
-                        else
+                        else if (Convert.ToChar(data) != (char)8)
                         {
                             messageBuilder.Append(data);
 
                         }
-
-                        if (_receiveDatas == null)
-                        {
-                            _receiveDatas = new ConcurrentDictionary<string, StringBuilder>();
-                        }
-
                         _receiveDatas[clientIp] = messageBuilder;
 
                         if (Convert.ToChar(data) == (char)13)
                         {
                             string receivedData = _receiveDatas[clientIp].ToString().Replace("\r", "");
                             ClientDataReceived?.Invoke(clientIp, receivedData);
-                            _receiveDatas[clientIp] = null;
+                            messageBuilder.Clear();
+                            _receiveDatas[clientIp] = messageBuilder;
                             continue;
                         }
                         await SendMessageAsync(clientIp, data, false);
