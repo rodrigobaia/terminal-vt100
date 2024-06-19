@@ -113,7 +113,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\TerminalVT100\TerminalVT100.csproj">
-      <Project>{386f71c1-63b9-4007-b528-027108cc4af7}</Project>
+      <Project>{8831c3ba-c61c-4f1f-905b-0cb6dc947a12}</Project>
       <Name>TerminalVT100</Name>
     </ProjectReference>
   </ItemGroup>
