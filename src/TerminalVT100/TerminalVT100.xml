@@ -30,6 +30,13 @@
             </summary>
             <param name="portNumber"></param>
         </member>
+        <member name="M:TerminalVT100.TedVT100Server.GetTcpClientAsync(System.String)">
+            <summary>
+            Busca Client para envio de dados
+            </summary>
+            <param name="ip">IP do Terminal</param>
+            <returns></returns>
+        </member>
         <member name="M:TerminalVT100.TedVT100Server.SendMessage(System.String,System.String,System.Boolean)">
             <param name="message">Mensagem a ser enviada</param>
             <param name="breakLine">Informa se é para quebrar linha no fim da mensagem</param>
@@ -49,6 +56,35 @@
         <member name="M:TerminalVT100.TedVT100Server.SendMessageAsync(System.String,System.String,System.Boolean)">
             <param name="message">Mensagem a ser enviada</param>
             <param name="breakLine">Informa se é para quebrar linha no fim da mensagem</param>
+            <returns></returns>
+        </member>
+        <member name="M:TerminalVT100.TedVT100Server.Beep(System.String,System.Int32)">
+            <summary>
+            Enviar Beep para o Terminal
+            </summary>
+            <param name="ip">IP do Terminal</param>
+            <param name="timeBeep">Tem po em Milisegundos de duração do Beep</param>
+        </member>
+        <member name="M:TerminalVT100.TedVT100Server.BeepAsync(System.String,System.Int32)">
+            <summary>
+            Enviar Beep para o Terminal
+            </summary>
+            <param name="ip">IP do Terminal</param>
+            <param name="timeBeep">Tem po em Milisegundos de duração do Beep</param>
+            <returns></returns>
+        </member>
+        <member name="M:TerminalVT100.TedVT100Server.BeepOffAsync(System.Net.Sockets.TcpClient)">
+            <summary>
+            Desliga o Beep
+            </summary>
+            <param name="client"></param>
+            <returns></returns>
+        </member>
+        <member name="M:TerminalVT100.TedVT100Server.BeepOnAsync(System.Net.Sockets.TcpClient)">
+            <summary>
+            Liga o Beep
+            </summary>
+            <param name="client"></param>
             <returns></returns>
         </member>
         <member name="M:TerminalVT100.TedVT100Server.EnabledCOM1(System.String)">

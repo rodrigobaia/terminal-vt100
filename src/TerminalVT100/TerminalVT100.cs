@@ -11,6 +11,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Linq;
 using Serilog;
+using System.Threading;
 
 namespace TerminalVT100
 {
@@ -118,17 +119,37 @@ namespace TerminalVT100
             {
                 using (NetworkStream stream = client.GetStream())
                 {
-                    byte[] buffer = new byte[1024];
                     StringBuilder messageBuilder = new StringBuilder();
 
                     while (true)
                     {
+                        byte[] buffer = new byte[client.ReceiveBufferSize];
                         int bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length);
                         if (bytesRead == 0)
-                            break;
+                            continue;
 
                         string data = Encoding.ASCII.GetString(buffer, 0, bytesRead);
-                        messageBuilder.Append(data);
+
+                        if (Convert.ToChar(data) == (char)8)
+                        {
+                            if (string.IsNullOrEmpty(messageBuilder.ToString()))
+                            {
+                                continue;
+                            }
+                            var len = messageBuilder.Length;
+                            var str = messageBuilder.Remove(len - 1, 1);
+                            messageBuilder = str;
+                        }
+                        if (Convert.ToChar(data) == (char)127 || Convert.ToChar(data) == (char)27)
+                        {
+                            await SendMessageAsync(clientIp, "\x1B[H\x1B[J", false);
+                            continue;
+                        }
+                        else
+                        {
+                            messageBuilder.Append(data);
+
+                        }
 
                         if (_receiveDatas == null)
                         {
@@ -137,13 +158,14 @@ namespace TerminalVT100
 
                         _receiveDatas[clientIp] = messageBuilder;
 
-                        await SendMessageAsync(clientIp, data, false);
-                        if (data.Contains("\r"))
+                        if (Convert.ToChar(data) == (char)13)
                         {
                             string receivedData = _receiveDatas[clientIp].ToString().Replace("\r", "");
                             ClientDataReceived?.Invoke(clientIp, receivedData);
-                            break;
+                            _receiveDatas[clientIp] = null;
+                            continue;
                         }
+                        await SendMessageAsync(clientIp, data, false);
                     }
                 }
             }
@@ -159,14 +181,57 @@ namespace TerminalVT100
         }
 
         /// <summary>
+        /// Busca Client para envio de dados
+        /// </summary>
+        /// <param name="ip">IP do Terminal</param>
+        /// <returns></returns>
+        private async Task<TcpClient> GetTcpClientAsync(string ip)
+        {
+            try
+            {
+                if (!_connectedClients.TryGetValue(ip, out TcpClient client))
+                {
+                    _logger.Warning($"GetTcpClientAsync - Client not found: {ip}. Attempting to connect.");
+
+                    try
+                    {
+                        client = new TcpClient();
+                        await client.ConnectAsync(ip, _portNumber);
+
+                        if (!_connectedClients.TryAdd(ip, client))
+                        {
+                            client.Close();
+                            _logger.Error($"GetTcpClientAsync - Failed to add new client to the list: {ip}");
+                            return null;
+                        }
+
+                        _logger.Information($"GetTcpClientAsync - Successfully connected to new client: {ip}");
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Error(ex, $"GetTcpClientAsync - Error connecting to client: {ip}, Exception: {ex.Message}");
+                        throw;
+                    }
+                }
+
+                return client;
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "TedVT100Server - GetTcpClientAsync");
+                return null;
+            }
+        }
+
+        /// <summary>
         /// Enviar Mensagem
         /// </summary>
         // <param name="ip">IP do Terminal</param>
         /// <param name="message">Mensagem a ser enviada</param>
         /// <param name="breakLine">Informa se é para quebrar linha no fim da mensagem</param>
-        public async void SendMessage(string ip, string message, bool breakLine = true)
+        public void SendMessage(string ip, string message, bool breakLine = true)
         {
-            SendMessageAsync(ip, message, breakLine);
+            Task.Run(() => SendMessageAsync(ip, message, breakLine));
         }
 
         /// <summary>
@@ -175,7 +240,7 @@ namespace TerminalVT100
         // <param name="ip">IP do Terminal</param>
         public void ClearDisplay(string ip)
         {
-            ClearDisplayAsync(ip);
+            Task.Run(() => ClearDisplayAsync(ip));
         }
 
         /// <summary>
@@ -185,14 +250,21 @@ namespace TerminalVT100
         /// <returns></returns>
         public async Task ClearDisplayAsync(string ip)
         {
-            if (!_connectedClients.TryGetValue(ip, out TcpClient client))
+            var client = await GetTcpClientAsync(ip);
+
+            if (client == null)
             {
-                _logger.Warning($"Client not found: {ip}");
+                _logger.Warning($"ClearDisplayAsync - Client not found: {ip}");
                 return;
             }
 
             try
             {
+                if (_receiveDatas != null && _receiveDatas.ContainsKey(ip))
+                {
+                    _receiveDatas[ip] = null;
+                }
+
                 string message = $"{(char)27}[H{(char)27}[J";
                 byte[] data = Encoding.ASCII.GetBytes(message);
                 await client.GetStream().WriteAsync(data, 0, data.Length);
@@ -212,9 +284,11 @@ namespace TerminalVT100
         /// <returns></returns>
         public async Task SendMessageAsync(string ip, string message, bool breakLine = true)
         {
-            if (!_connectedClients.TryGetValue(ip, out TcpClient client))
+            var client = await GetTcpClientAsync(ip);
+
+            if (client == null)
             {
-                _logger.Warning($"Client not found: {ip}");
+                _logger.Warning($"SendMessageAsync - Client not found: {ip}");
                 return;
             }
 
@@ -236,6 +310,88 @@ namespace TerminalVT100
         }
 
         /// <summary>
+        /// Enviar Beep para o Terminal
+        /// </summary>
+        /// <param name="ip">IP do Terminal</param>
+        /// <param name="timeBeep">Tem po em Milisegundos de duração do Beep</param>
+        public void Beep(string ip, int timeBeep = 600)
+        {
+            Task.Run(() => BeepAsync(ip, timeBeep));
+        }
+
+        /// <summary>
+        /// Enviar Beep para o Terminal
+        /// </summary>
+        /// <param name="ip">IP do Terminal</param>
+        /// <param name="timeBeep">Tem po em Milisegundos de duração do Beep</param>
+        /// <returns></returns>
+        public async Task BeepAsync(string ip, int timeBeep = 600)
+        {
+            var client = await GetTcpClientAsync(ip);
+
+            if (client == null)
+            {
+                _logger.Warning($"BeepAsync - Client not found: {ip}");
+                return;
+            }
+
+            try
+            {
+                await BeepOnAsync(client);
+                Thread.Sleep(timeBeep);
+                await BeepOffAsync(client);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, $"Error Beep to client {ip}");
+
+            }
+        }
+
+        /// <summary>
+        /// Desliga o Beep
+        /// </summary>
+        /// <param name="client"></param>
+        /// <returns></returns>
+        private async Task BeepOffAsync(TcpClient client)
+        {
+            try
+            {
+                // Buzzer
+                var acionamentoChar = (char)11;
+                var message = $"{(char)27}[?24c{(char)27}[5i{acionamentoChar}{(char)27}[4i";
+                byte[] data = Encoding.ASCII.GetBytes(message);
+                await client.GetStream().WriteAsync(data, 0, data.Length);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "TedVT100 - BeepOffAsync");
+            }
+        }
+
+        /// <summary>
+        /// Liga o Beep
+        /// </summary>
+        /// <param name="client"></param>
+        /// <returns></returns>
+        private async Task BeepOnAsync(TcpClient client)
+        {
+            try
+            {
+                // Buzzer
+                var acionamentoChar = (char)7;
+                var message = $"{(char)27}[?24c{(char)27}[5i{acionamentoChar}{(char)27}[4i";
+                byte[] data = Encoding.ASCII.GetBytes(message);
+                await client.GetStream().WriteAsync(data, 0, data.Length);
+
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "TedVT100 - BeepOnAsync");
+            }
+        }
+
+        /// <summary>
         /// Habilitar porta COM 1
         /// </summary>
         /// <param name="ip">IP do Terminal</param>
@@ -251,9 +407,11 @@ namespace TerminalVT100
         /// <returns></returns>
         public async Task EnabledCOM1Async(string ip)
         {
-            if (!_connectedClients.TryGetValue(ip, out TcpClient client))
+            var client = await GetTcpClientAsync(ip);
+
+            if (client == null)
             {
-                _logger.Warning($"Client not found: {ip}");
+                _logger.Warning($"EnabledCOM1Async - Client not found: {ip}");
                 return;
             }
 
@@ -285,9 +443,11 @@ namespace TerminalVT100
         /// <returns></returns>
         public async Task EnabledCOM2Async(string ip)
         {
-            if (!_connectedClients.TryGetValue(ip, out TcpClient client))
+            var client = await GetTcpClientAsync(ip);
+
+            if (client == null)
             {
-                _logger.Warning($"Client not found: {ip}");
+                _logger.Warning($"EnabledCOM2Async - Client not found: {ip}");
                 return;
             }
 
