@@ -37,10 +37,6 @@
             <param name="ip">IP do Terminal</param>
             <returns></returns>
         </member>
-        <member name="M:TerminalVT100.TedVT100Server.SendMessage(System.String,System.String,System.Boolean)">
-            <param name="message">Mensagem a ser enviada</param>
-            <param name="breakLine">Informa se é para quebrar linha no fim da mensagem</param>
-        </member>
         <member name="M:TerminalVT100.TedVT100Server.ClearDisplay(System.String)">
             <summary>
             Limpa o Display
@@ -53,9 +49,38 @@
             <param name="ip">IP do Terminal</param>
             <returns></returns>
         </member>
-        <member name="M:TerminalVT100.TedVT100Server.SendMessageAsync(System.String,System.String,System.Boolean)">
+        <member name="M:TerminalVT100.TedVT100Server.SendMessage(System.String,System.String,System.Boolean)">
+            <summary>
+            Enviar Mensagem
+            </summary>
+            <param name="ip">IP do Terminal</param>
             <param name="message">Mensagem a ser enviada</param>
             <param name="breakLine">Informa se é para quebrar linha no fim da mensagem</param>
+        </member>
+        <member name="M:TerminalVT100.TedVT100Server.SendMessageAsync(System.String,System.String,System.Boolean)">
+            <summary>
+            Envia mensagem para o Terminal
+            </summary>
+            <param name="ip">IP do Terminal</param>
+            <param name="message">Mensagem a ser enviada</param>
+            <param name="breakLine">Informa se é para quebrar linha no fim da mensagem</param>
+            <returns></returns>
+        </member>
+        <member name="M:TerminalVT100.TedVT100Server.PositionCursor(System.String,System.Int32,System.Int32)">
+            <summary>
+            Posição do Curor
+            </summary>
+            <param name="ip">IP do Terminal</param>
+            <param name="row">Numero da Linha</param>
+            <param name="column">Número da Coluna</param>
+        </member>
+        <member name="M:TerminalVT100.TedVT100Server.PositionCursorAsync(System.String,System.Int32,System.Int32)">
+            <summary>
+            Posição do Curor
+            </summary>
+            <param name="ip">IP do Terminal</param>
+            <param name="row">Numero da Linha</param>
+            <param name="column">Número da Coluna</param>
             <returns></returns>
         </member>
         <member name="M:TerminalVT100.TedVT100Server.Beep(System.String,System.Int32)">
@@ -94,14 +119,23 @@
             <param name="ip">IP do Terminal</param>
         </member>
         <member name="M:TerminalVT100.TedVT100Server.EnabledCOM1Async(System.String)">
+            <summary>
+            /// Habilitar porta COM 1
+            </summary>
+            <param name="ip">IP do Terminal</param>
             <returns></returns>
         </member>
         <member name="M:TerminalVT100.TedVT100Server.EnabledCOM2(System.String)">
             <summary>
             Habilitar porta COM 2
             </summary>
+            <param name="ip">IP do Terminal</param>
         </member>
         <member name="M:TerminalVT100.TedVT100Server.EnabledCOM2Async(System.String)">
+            <summary>
+            Habilitar porta COM 2
+            </summary>
+            <param name="ip">IP do Terminal</param>
             <returns></returns>
         </member>
         <member name="M:TerminalVT100.TedVT100Server.Dispose">
@@ -139,6 +173,16 @@
             </summary>
             <param name="ipAddress">O endereço IP a ser verificado.</param>
             <returns>True se há conexão com a internet, caso contrário, False.</returns>
+        </member>
+        <member name="P:TerminalVT100.TedVT100Server.Row">
+            <summary>
+            Linha do Cursor
+            </summary>
+        </member>
+        <member name="P:TerminalVT100.TedVT100Server.Column">
+            <summary>
+            Coluna Cursor
+            </summary>
         </member>
     </members>
 </doc>

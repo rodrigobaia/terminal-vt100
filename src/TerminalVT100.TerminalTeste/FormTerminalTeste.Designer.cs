@@ -47,8 +47,13 @@
             this.pictureBox1 = new System.Windows.Forms.PictureBox();
             this.label5 = new System.Windows.Forms.Label();
             this.label6 = new System.Windows.Forms.Label();
+            this.TxtLinha = new System.Windows.Forms.NumericUpDown();
+            this.BtnBeep = new System.Windows.Forms.Button();
+            this.label7 = new System.Windows.Forms.Label();
+            this.textBox1 = new System.Windows.Forms.TextBox();
             this.groupBox1.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.pictureBox1)).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)(this.TxtLinha)).BeginInit();
             this.SuspendLayout();
             // 
             // BtnConectar
@@ -139,17 +144,20 @@
             // 
             // richTextBox1
             // 
-            this.richTextBox1.Location = new System.Drawing.Point(499, 104);
+            this.richTextBox1.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
+            | System.Windows.Forms.AnchorStyles.Right)));
+            this.richTextBox1.Location = new System.Drawing.Point(556, 104);
             this.richTextBox1.Name = "richTextBox1";
-            this.richTextBox1.Size = new System.Drawing.Size(339, 323);
+            this.richTextBox1.Size = new System.Drawing.Size(339, 401);
             this.richTextBox1.TabIndex = 30;
             this.richTextBox1.Text = "";
             // 
             // label3
             // 
+            this.label3.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
             this.label3.AutoSize = true;
             this.label3.Font = new System.Drawing.Font("Microsoft Sans Serif", 7.8F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.label3.Location = new System.Drawing.Point(496, 84);
+            this.label3.Location = new System.Drawing.Point(553, 84);
             this.label3.Name = "label3";
             this.label3.Size = new System.Drawing.Size(109, 16);
             this.label3.TabIndex = 29;
@@ -159,7 +167,7 @@
             // 
             this.label4.AutoSize = true;
             this.label4.Font = new System.Drawing.Font("Microsoft Sans Serif", 10F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.label4.Location = new System.Drawing.Point(21, 317);
+            this.label4.Location = new System.Drawing.Point(19, 400);
             this.label4.Name = "label4";
             this.label4.Size = new System.Drawing.Size(111, 20);
             this.label4.TabIndex = 32;
@@ -169,17 +177,17 @@
             // 
             this.TxtMensagem.BackColor = System.Drawing.SystemColors.Info;
             this.TxtMensagem.Font = new System.Drawing.Font("Microsoft Sans Serif", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.TxtMensagem.Location = new System.Drawing.Point(21, 343);
+            this.TxtMensagem.Location = new System.Drawing.Point(19, 426);
             this.TxtMensagem.MaxLength = 200;
             this.TxtMensagem.Name = "TxtMensagem";
             this.TxtMensagem.Size = new System.Drawing.Size(299, 30);
             this.TxtMensagem.TabIndex = 31;
-            this.TxtMensagem.Text = "Enviar mensagem terminal";
+            this.TxtMensagem.Text = "Seja Bem Vindo";
             this.TxtMensagem.TextChanged += new System.EventHandler(this.TxtMensagem_TextChanged);
             // 
             // BtnSendMessage
             // 
-            this.BtnSendMessage.Location = new System.Drawing.Point(341, 330);
+            this.BtnSendMessage.Location = new System.Drawing.Point(401, 413);
             this.BtnSendMessage.Name = "BtnSendMessage";
             this.BtnSendMessage.Size = new System.Drawing.Size(131, 43);
             this.BtnSendMessage.TabIndex = 33;
@@ -191,17 +199,17 @@
             // 
             this.TxtError.Dock = System.Windows.Forms.DockStyle.Bottom;
             this.TxtError.ForeColor = System.Drawing.Color.Red;
-            this.TxtError.Location = new System.Drawing.Point(0, 438);
+            this.TxtError.Location = new System.Drawing.Point(0, 515);
             this.TxtError.Multiline = true;
             this.TxtError.Name = "TxtError";
             this.TxtError.ScrollBars = System.Windows.Forms.ScrollBars.Vertical;
-            this.TxtError.Size = new System.Drawing.Size(850, 134);
+            this.TxtError.Size = new System.Drawing.Size(906, 134);
             this.TxtError.TabIndex = 34;
             // 
             // LblCount
             // 
             this.LblCount.Font = new System.Drawing.Font("Microsoft Sans Serif", 10F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.LblCount.Location = new System.Drawing.Point(229, 376);
+            this.LblCount.Location = new System.Drawing.Point(228, 461);
             this.LblCount.Name = "LblCount";
             this.LblCount.Size = new System.Drawing.Size(91, 25);
             this.LblCount.TabIndex = 35;
@@ -224,27 +232,88 @@
             this.label5.Font = new System.Drawing.Font("Microsoft Sans Serif", 16F, ((System.Drawing.FontStyle)((System.Drawing.FontStyle.Bold | System.Drawing.FontStyle.Underline))), System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.label5.Location = new System.Drawing.Point(-6, 31);
             this.label5.Name = "label5";
-            this.label5.Size = new System.Drawing.Size(850, 53);
+            this.label5.Size = new System.Drawing.Size(906, 53);
             this.label5.TabIndex = 37;
             this.label5.Text = "TESTA TERMINAL TCP - VT100";
             this.label5.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
             // 
             // label6
             // 
+            this.label6.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
             this.label6.AutoSize = true;
             this.label6.Font = new System.Drawing.Font("Microsoft Sans Serif", 10F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.label6.ForeColor = System.Drawing.Color.Red;
-            this.label6.Location = new System.Drawing.Point(13, 407);
+            this.label6.Location = new System.Drawing.Point(13, 489);
             this.label6.Name = "label6";
             this.label6.Size = new System.Drawing.Size(64, 20);
             this.label6.TabIndex = 38;
             this.label6.Text = "Error :";
             // 
+            // TxtLinha
+            // 
+            this.TxtLinha.BackColor = System.Drawing.SystemColors.Info;
+            this.TxtLinha.Font = new System.Drawing.Font("Microsoft Sans Serif", 12F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.TxtLinha.Location = new System.Drawing.Point(325, 426);
+            this.TxtLinha.Maximum = new decimal(new int[] {
+            4,
+            0,
+            0,
+            0});
+            this.TxtLinha.Minimum = new decimal(new int[] {
+            1,
+            0,
+            0,
+            0});
+            this.TxtLinha.Name = "TxtLinha";
+            this.TxtLinha.Size = new System.Drawing.Size(70, 30);
+            this.TxtLinha.TabIndex = 39;
+            this.TxtLinha.TextAlign = System.Windows.Forms.HorizontalAlignment.Center;
+            this.TxtLinha.Value = new decimal(new int[] {
+            1,
+            0,
+            0,
+            0});
+            // 
+            // BtnBeep
+            // 
+            this.BtnBeep.Location = new System.Drawing.Point(138, 328);
+            this.BtnBeep.Name = "BtnBeep";
+            this.BtnBeep.Size = new System.Drawing.Size(131, 43);
+            this.BtnBeep.TabIndex = 40;
+            this.BtnBeep.Text = "Beep";
+            this.BtnBeep.UseVisualStyleBackColor = true;
+            this.BtnBeep.Click += new System.EventHandler(this.BtnBeep_Click);
+            // 
+            // label7
+            // 
+            this.label7.AutoSize = true;
+            this.label7.Font = new System.Drawing.Font("Microsoft Sans Serif", 10F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.label7.Location = new System.Drawing.Point(22, 315);
+            this.label7.Name = "label7";
+            this.label7.Size = new System.Drawing.Size(92, 20);
+            this.label7.TabIndex = 42;
+            this.label7.Text = "TimeOut :";
+            // 
+            // textBox1
+            // 
+            this.textBox1.BackColor = System.Drawing.SystemColors.Info;
+            this.textBox1.Font = new System.Drawing.Font("Microsoft Sans Serif", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.textBox1.Location = new System.Drawing.Point(22, 341);
+            this.textBox1.MaxLength = 200;
+            this.textBox1.Name = "textBox1";
+            this.textBox1.Size = new System.Drawing.Size(92, 30);
+            this.textBox1.TabIndex = 41;
+            this.textBox1.Text = "600";
+            // 
             // FormTerminalTeste
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(8F, 16F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(850, 572);
+            this.ClientSize = new System.Drawing.Size(906, 649);
+            this.Controls.Add(this.label7);
+            this.Controls.Add(this.textBox1);
+            this.Controls.Add(this.BtnBeep);
+            this.Controls.Add(this.TxtLinha);
             this.Controls.Add(this.label6);
             this.Controls.Add(this.pictureBox1);
             this.Controls.Add(this.LblCount);
@@ -264,9 +333,11 @@
             this.Name = "FormTerminalTeste";
             this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
             this.Text = "Testa Servidor TCP - VT100";
+            this.Load += new System.EventHandler(this.FormTerminalTeste_Load);
             this.groupBox1.ResumeLayout(false);
             this.groupBox1.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)(this.pictureBox1)).EndInit();
+            ((System.ComponentModel.ISupportInitialize)(this.TxtLinha)).EndInit();
             this.ResumeLayout(false);
             this.PerformLayout();
 
@@ -292,6 +363,10 @@
         private System.Windows.Forms.PictureBox pictureBox1;
         private System.Windows.Forms.Label label5;
         private System.Windows.Forms.Label label6;
+        private System.Windows.Forms.NumericUpDown TxtLinha;
+        private System.Windows.Forms.Button BtnBeep;
+        private System.Windows.Forms.Label label7;
+        private System.Windows.Forms.TextBox textBox1;
     }
 }
 

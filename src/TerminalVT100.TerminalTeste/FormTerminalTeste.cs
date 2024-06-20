@@ -53,6 +53,7 @@ namespace TerminalVT100.TerminalTeste
 
         private void TedVT100Service_ClientConnected(string ip)
         {
+            TedVT100Service.ClearDisplay(ip);
             if (!_ips.Where(x => x == ip).Any())
             {
                 _ips.Add(ip);
@@ -132,7 +133,8 @@ namespace TerminalVT100.TerminalTeste
                 }
 
                 var ip = _ips[CboTerminais.SelectedIndex];
-
+                var linha = Convert.ToInt32(TxtLinha.Value);
+                TedVT100Service.PositionCursor(ip, linha);
                 TedVT100Service.SendMessage(ip, TxtMensagem.Text);
 
             }
@@ -156,6 +158,33 @@ namespace TerminalVT100.TerminalTeste
         private void TxtMensagem_TextChanged(object sender, EventArgs e)
         {
             LblCount.Text = TxtMensagem.Text.Length.ToString();
+        }
+
+        private void BtnBeep_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                if (CboTerminais.SelectedIndex < 0)
+                {
+                    return;
+                }
+
+                var ip = _ips[CboTerminais.SelectedIndex];
+                var timeOut = Convert.ToInt32(textBox1.Text);
+
+                TedVT100Service.Beep(ip, timeOut);
+
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "BtnBeep_Click");
+                TxtError.Text = $"BtnBeep_Click - [{ex.Message}]"; ;
+            }
+        }
+
+        private void FormTerminalTeste_Load(object sender, EventArgs e)
+        {
+            BtnConectar_Click(sender, e);
         }
     }
 }

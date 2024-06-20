@@ -120,55 +120,88 @@ namespace TerminalVT100
                 using (NetworkStream stream = client.GetStream())
                 {
                     StringBuilder messageBuilder = new StringBuilder();
+                    var row = 1;
+                    var column = 0;
 
                     while (true)
                     {
-                        byte[] buffer = new byte[client.ReceiveBufferSize];
-                        int bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length);
-                        if (bytesRead == 0)
-                            continue;
-
-                        string data = Encoding.ASCII.GetString(buffer, 0, bytesRead);
-                        if (_receiveDatas == null)
+                        try
                         {
-                            _receiveDatas = new ConcurrentDictionary<string, StringBuilder>();
-                        }
+                            byte[] buffer = new byte[client.ReceiveBufferSize];
+                            int bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length);
+                            if (bytesRead == 0)
+                                continue;
 
-                        if (Convert.ToChar(data) == (char)8)
-                        {
-                            if (string.IsNullOrEmpty(messageBuilder.ToString()))
+                            string data = Encoding.ASCII.GetString(buffer, 0, bytesRead);
+                            if (_receiveDatas == null)
                             {
+                                _receiveDatas = new ConcurrentDictionary<string, StringBuilder>();
+                            }
+
+                            if (Convert.ToChar(data) == (char)8)
+                            {
+                                if (string.IsNullOrEmpty(messageBuilder.ToString()))
+                                {
+                                    continue;
+                                }
+                                var len = messageBuilder.Length;
+                                var str = messageBuilder.Remove(len - 1, 1);
+                                messageBuilder = str;
+
+                                await SendMessageAsync(clientIp, ((char)8).ToString() + " " + ((char)8).ToString(), false);
+                                _receiveDatas[clientIp] = messageBuilder;
+                                column--;
+                                if (column <= 0)
+                                {
+                                    column = 0;
+                                }
                                 continue;
                             }
-                            var len = messageBuilder.Length;
-                            var str = messageBuilder.Remove(len - 1, 1);
-                            messageBuilder = str;
+                            if (Convert.ToChar(data) == (char)127 || Convert.ToChar(data) == (char)27)
+                            {
+                                await PositionCursorAsync(clientIp);
+                                await SendMessageAsync(clientIp, "\x1B[H\x1B[J", false);
+                                column = 0;
+                                continue;
+                            }
+                            else if (Convert.ToChar(data) != (char)8)
+                            {
+                                messageBuilder.Append(data);
 
-                            await SendMessageAsync(clientIp, ((char)8).ToString() + " " + ((char)8).ToString(), false);
+                            }
                             _receiveDatas[clientIp] = messageBuilder;
-                            continue;
-                        }
-                        if (Convert.ToChar(data) == (char)127 || Convert.ToChar(data) == (char)27)
-                        {
-                            await SendMessageAsync(clientIp, "\x1B[H\x1B[J", false);
-                            continue;
-                        }
-                        else if (Convert.ToChar(data) != (char)8)
-                        {
-                            messageBuilder.Append(data);
 
-                        }
-                        _receiveDatas[clientIp] = messageBuilder;
+                            if (Convert.ToChar(data) == (char)13)
+                            {
+                                string receivedData = _receiveDatas[clientIp].ToString().Replace("\r", "");
+                                ClientDataReceived?.Invoke(clientIp, receivedData);
+                                messageBuilder.Clear();
+                                _receiveDatas[clientIp] = messageBuilder;
+                                row++;
+                                if (row > 4)
+                                {
+                                    row = 1;
+                                }
+                                Row = row;
+                                column = 0;
+                                continue;
+                            }
+                            row = Row != row ? Row : row;
+                            column++;
 
-                        if (Convert.ToChar(data) == (char)13)
-                        {
-                            string receivedData = _receiveDatas[clientIp].ToString().Replace("\r", "");
-                            ClientDataReceived?.Invoke(clientIp, receivedData);
-                            messageBuilder.Clear();
-                            _receiveDatas[clientIp] = messageBuilder;
-                            continue;
+                            if (column > 20)
+                            {
+                                column = 1;
+                                row++;
+                            }
+
+                            await PositionCursorAsync(clientIp, row, column);
+                            await SendMessageAsync(clientIp, data, false);
                         }
-                        await SendMessageAsync(clientIp, data, false);
+                        catch (Exception ex)
+                        {
+                            _logger.Error(ex, "Error handling client - while");
+                        }
                     }
                 }
             }
@@ -227,17 +260,6 @@ namespace TerminalVT100
         }
 
         /// <summary>
-        /// Enviar Mensagem
-        /// </summary>
-        // <param name="ip">IP do Terminal</param>
-        /// <param name="message">Mensagem a ser enviada</param>
-        /// <param name="breakLine">Informa se é para quebrar linha no fim da mensagem</param>
-        public void SendMessage(string ip, string message, bool breakLine = true)
-        {
-            Task.Run(() => SendMessageAsync(ip, message, breakLine));
-        }
-
-        /// <summary>
         /// Limpa o Display
         /// </summary>
         // <param name="ip">IP do Terminal</param>
@@ -271,6 +293,7 @@ namespace TerminalVT100
                 string message = $"{(char)27}[H{(char)27}[J";
                 byte[] data = Encoding.ASCII.GetBytes(message);
                 await client.GetStream().WriteAsync(data, 0, data.Length);
+                await PositionCursorAsync(ip);
             }
             catch (Exception ex)
             {
@@ -279,13 +302,24 @@ namespace TerminalVT100
         }
 
         /// <summary>
+        /// Enviar Mensagem
+        /// </summary>
+        /// <param name="ip">IP do Terminal</param>
+        /// <param name="message">Mensagem a ser enviada</param>
+        /// <param name="breakLine">Informa se é para quebrar linha no fim da mensagem</param>
+        public void SendMessage(string ip, string message, bool breakLine = true)
+        {
+            Task.Run(() => SendMessageAsync(ip, message, breakLine));
+        }
+
+        /// <summary>
         /// Envia mensagem para o Terminal
         /// </summary>
-        // <param name="ip">IP do Terminal</param>
+        /// <param name="ip">IP do Terminal</param>
         /// <param name="message">Mensagem a ser enviada</param>
         /// <param name="breakLine">Informa se é para quebrar linha no fim da mensagem</param>
         /// <returns></returns>
-        public async Task SendMessageAsync(string ip, string message, bool breakLine = true)
+        public async Task SendMessageAsync(string ip, string message, bool breakLine = false)
         {
             var client = await GetTcpClientAsync(ip);
 
@@ -297,18 +331,63 @@ namespace TerminalVT100
 
             try
             {
+
                 if (breakLine)
                 {
                     // Adiciona uma quebra de linha ao final da mensagem
                     message += "\r\n";  // Ou apenas "\n" dependendo do requisito VT100
                 }
 
-                byte[] data = Encoding.ASCII.GetBytes(message);
+                var data = Encoding.ASCII.GetBytes(message);
                 await client.GetStream().WriteAsync(data, 0, data.Length);
             }
             catch (Exception ex)
             {
                 _logger.Error(ex, $"Error sending message to client {ip}");
+            }
+        }
+
+        /// <summary>
+        /// Posição do Curor
+        /// </summary>
+        /// <param name="ip">IP do Terminal</param>
+        /// <param name="row">Numero da Linha</param>
+        /// <param name="column">Número da Coluna</param>
+        public void PositionCursor(string ip, int row = 1, int column = 1)
+        {
+            Task.Run(() => PositionCursorAsync(ip, row, column));
+        }
+
+        /// <summary>
+        /// Posição do Curor
+        /// </summary>
+        /// <param name="ip">IP do Terminal</param>
+        /// <param name="row">Numero da Linha</param>
+        /// <param name="column">Número da Coluna</param>
+        /// <returns></returns>
+        public async Task PositionCursorAsync(string ip, int row = 1, int column = 1)
+        {
+            var client = await GetTcpClientAsync(ip);
+
+            if (client == null)
+            {
+                _logger.Warning($"PositionCursorAsync - Client not found: {ip}");
+                return;
+            }
+
+            try
+            {
+                Row = row > 4 ? 1 : row;
+                Column = column;
+                var strline = ((char)27).ToString() + "[" + Row.ToString("D2") + ";" + Column.ToString("D2") + "H";
+
+                byte[] data = Encoding.ASCII.GetBytes(strline);
+                await client.GetStream().WriteAsync(data, 0, data.Length);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, $"Error position cursor to client {ip}");
+
             }
         }
 
@@ -406,7 +485,7 @@ namespace TerminalVT100
         /// <summary>
         /// /// Habilitar porta COM 1
         /// </summary>
-        // <param name="ip">IP do Terminal</param>
+        /// <param name="ip">IP do Terminal</param>
         /// <returns></returns>
         public async Task EnabledCOM1Async(string ip)
         {
@@ -433,7 +512,7 @@ namespace TerminalVT100
         /// <summary>
         /// Habilitar porta COM 2
         /// </summary>
-        // <param name="ip">IP do Terminal</param>
+        /// <param name="ip">IP do Terminal</param>
         public void EnabledCOM2(string ip)
         {
             EnabledCOM2Async(ip);
@@ -442,7 +521,7 @@ namespace TerminalVT100
         /// <summary>
         /// Habilitar porta COM 2
         /// </summary>
-        // <param name="ip">IP do Terminal</param>
+        /// <param name="ip">IP do Terminal</param>
         /// <returns></returns>
         public async Task EnabledCOM2Async(string ip)
         {
@@ -607,5 +686,16 @@ namespace TerminalVT100
                 return false;
             }
         }
+
+        /// <summary>
+        /// Linha do Cursor
+        /// </summary>
+        public int Row { get; set; } = 1;
+
+        /// <summary>
+        /// Coluna Cursor
+        /// </summary>
+        public int Column { get; set; } = 1;
+
     }
 }
