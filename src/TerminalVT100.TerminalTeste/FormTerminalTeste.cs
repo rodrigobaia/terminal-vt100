@@ -172,7 +172,7 @@ namespace TerminalVT100.TerminalTeste
                 var ip = _ips[CboTerminais.SelectedIndex];
                 var timeOut = Convert.ToInt32(textBox1.Text);
 
-                TedVT100Service.Beep(ip, timeOut);
+                //TedVT100Service.Beep(ip, timeOut);
 
             }
             catch (Exception ex)

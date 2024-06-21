@@ -4,6 +4,26 @@
         <name>TerminalVT100</name>
     </assembly>
     <members>
+        <member name="T:TerminalVT100.ClientState">
+            <summary>
+            Estado de digitação do Terminal
+            </summary>
+        </member>
+        <member name="P:TerminalVT100.ClientState.Row">
+            <summary>
+            Linha do Cursor do Terminal
+            </summary>
+        </member>
+        <member name="P:TerminalVT100.ClientState.Column">
+            <summary>
+            Coluna do Cursor do Terminal
+            </summary>
+        </member>
+        <member name="P:TerminalVT100.ClientState.MessageBuilder">
+            <summary>
+            Message do Terminal
+            </summary>
+        </member>
         <member name="T:TerminalVT100.TedVT100Server">
             <summary>
             Servidor Terminal VT 100

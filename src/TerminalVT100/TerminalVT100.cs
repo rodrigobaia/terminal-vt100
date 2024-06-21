@@ -24,7 +24,7 @@ namespace TerminalVT100
         private TcpListener _server;
         private int _portNumber;
         private ConcurrentDictionary<string, TcpClient> _connectedClients;
-        private ConcurrentDictionary<string, StringBuilder> _receiveDatas;
+        private ConcurrentDictionary<string, ClientState> _clientStates;
 
         /// <summary>
         /// Evento que informa a existe de dados enviados pelo o Terminal para o servidor TEDVT100
@@ -37,6 +37,7 @@ namespace TerminalVT100
         public event Action<string> ClientConnected;
 
         private bool _disposed = false;
+        private bool _isRunning = false;
 
         /// <summary>
         /// Construtor
@@ -45,6 +46,7 @@ namespace TerminalVT100
         {
             InitializeLogger();
             _connectedClients = new ConcurrentDictionary<string, TcpClient>();
+            _clientStates = new ConcurrentDictionary<string, ClientState>();
         }
 
         private void InitializeLogger()
@@ -88,12 +90,13 @@ namespace TerminalVT100
             _server = new TcpListener(IPAddress.Parse(ipCurrent), _portNumber);
             _server.Start();
 
+            _isRunning = true;
             Task.Run(() => AcceptClientsAsync());
         }
 
         private async Task AcceptClientsAsync()
         {
-            while (true)
+            while (_isRunning)
             {
                 try
                 {
@@ -113,47 +116,56 @@ namespace TerminalVT100
             string clientIp = endPoint.Address.ToString();
 
             _connectedClients.TryAdd(clientIp, client);
+            _clientStates.TryAdd(clientIp, new ClientState());
             ClientConnected?.Invoke(clientIp);
 
             try
             {
                 using (NetworkStream stream = client.GetStream())
                 {
-                    StringBuilder messageBuilder = new StringBuilder();
-                    var row = 1;
-                    var column = 0;
+                    int bufferSize = client.ReceiveBufferSize;
+                    byte[] buffer = new byte[bufferSize];
 
-                    while (true)
+                    while (_isRunning)
                     {
                         try
                         {
-                            byte[] buffer = new byte[client.ReceiveBufferSize];
-                            int bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length);
-                            if (bytesRead == 0)
-                                continue;
+                            int bytesRead = 0;
+
+                            try
+                            {
+                                bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length);
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.Error(ex, "Error reading from client stream");
+                                break;
+                            }
+
+                            if (bytesRead == 0) // Conexão foi fechada
+                            {
+                                _logger.Warning($"Connection closed by client: {clientIp}");
+                                break;
+                            }
 
                             string data = Encoding.ASCII.GetString(buffer, 0, bytesRead);
-                            if (_receiveDatas == null)
-                            {
-                                _receiveDatas = new ConcurrentDictionary<string, StringBuilder>();
-                            }
+                            var clientState = _clientStates[clientIp];
 
                             if (Convert.ToChar(data) == (char)8)
                             {
-                                if (string.IsNullOrEmpty(messageBuilder.ToString()))
+                                if (string.IsNullOrEmpty(clientState.MessageBuilder.ToString()))
                                 {
                                     continue;
                                 }
-                                var len = messageBuilder.Length;
-                                var str = messageBuilder.Remove(len - 1, 1);
-                                messageBuilder = str;
+                                var len = clientState.MessageBuilder.Length;
+                                var str = clientState.MessageBuilder.Remove(len - 1, 1);
+                                clientState.MessageBuilder = str;
 
                                 await SendMessageAsync(clientIp, ((char)8).ToString() + " " + ((char)8).ToString(), false);
-                                _receiveDatas[clientIp] = messageBuilder;
-                                column--;
-                                if (column <= 0)
+                                clientState.Column--;
+                                if (clientState.Column <= 0)
                                 {
-                                    column = 0;
+                                    clientState.Column = 0;
                                 }
                                 continue;
                             }
@@ -161,41 +173,34 @@ namespace TerminalVT100
                             {
                                 await PositionCursorAsync(clientIp);
                                 await SendMessageAsync(clientIp, "\x1B[H\x1B[J", false);
-                                column = 0;
+                                clientState.Column = 0;
                                 continue;
                             }
-                            else if (Convert.ToChar(data) != (char)8)
-                            {
-                                messageBuilder.Append(data);
 
-                            }
-                            _receiveDatas[clientIp] = messageBuilder;
+                            clientState.MessageBuilder.Append(data);
 
                             if (Convert.ToChar(data) == (char)13)
                             {
-                                string receivedData = _receiveDatas[clientIp].ToString().Replace("\r", "");
+                                string receivedData = clientState.MessageBuilder.ToString().Replace("\r", "");
                                 ClientDataReceived?.Invoke(clientIp, receivedData);
-                                messageBuilder.Clear();
-                                _receiveDatas[clientIp] = messageBuilder;
-                                row++;
-                                if (row > 4)
+                                clientState.MessageBuilder.Clear();
+                                clientState.Row++;
+                                if (clientState.Row > 4)
                                 {
-                                    row = 1;
+                                    clientState.Row = 1;
                                 }
-                                Row = row;
-                                column = 0;
+                                clientState.Column = 0;
                                 continue;
                             }
-                            row = Row != row ? Row : row;
-                            column++;
+                            clientState.Column++;
 
-                            if (column > 20)
+                            if (clientState.Column > 20)
                             {
-                                column = 1;
-                                row++;
+                                clientState.Column = 1;
+                                clientState.Row++;
                             }
 
-                            await PositionCursorAsync(clientIp, row, column);
+                            await PositionCursorAsync(clientIp, clientState.Row, clientState.Column);
                             await SendMessageAsync(clientIp, data, false);
                         }
                         catch (Exception ex)
@@ -285,9 +290,11 @@ namespace TerminalVT100
 
             try
             {
-                if (_receiveDatas != null && _receiveDatas.ContainsKey(ip))
+                if (_clientStates.TryGetValue(ip, out ClientState clientState))
                 {
-                    _receiveDatas[ip] = null;
+                    clientState.MessageBuilder.Clear();
+                    clientState.Row = 1;
+                    clientState.Column = 1;
                 }
 
                 string message = $"{(char)27}[H{(char)27}[J";
@@ -377,11 +384,8 @@ namespace TerminalVT100
 
             try
             {
-                Row = row > 4 ? 1 : row;
-                Column = column;
-                var strline = ((char)27).ToString() + "[" + Row.ToString("D2") + ";" + Column.ToString("D2") + "H";
-
-                byte[] data = Encoding.ASCII.GetBytes(strline);
+                string message = $"\x1B[{row};{column}H";
+                var data = Encoding.ASCII.GetBytes(message);
                 await client.GetStream().WriteAsync(data, 0, data.Length);
             }
             catch (Exception ex)
@@ -564,7 +568,9 @@ namespace TerminalVT100
             {
                 if (disposing)
                 {
-                    _server.Stop();
+                    _server?.Stop();
+                    _isRunning = false;
+                    
                     foreach (var client in _connectedClients.Values)
                     {
                         client.Close();
@@ -686,16 +692,6 @@ namespace TerminalVT100
                 return false;
             }
         }
-
-        /// <summary>
-        /// Linha do Cursor
-        /// </summary>
-        public int Row { get; set; } = 1;
-
-        /// <summary>
-        /// Coluna Cursor
-        /// </summary>
-        public int Column { get; set; } = 1;
 
     }
 }
