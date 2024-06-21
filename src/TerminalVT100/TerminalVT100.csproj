@@ -7,7 +7,7 @@
 		<Title>TerminalVT100</Title>
 		<Company>NEBULA SISTEMAS</Company>
 		<Description>Biblioteca responsável em criar um servidor TCP para comunicação com Mini-Terminal usando protocolo VP100.</Description>
-		<PackageReleaseNotes>Implementado Posição do Cursor para o recebimento de mensagem.</PackageReleaseNotes>
+		<PackageReleaseNotes>Implementado o recebimento de cada tecla digitada por terminal e enviado para o recpetor do terminal.</PackageReleaseNotes>
 		<Copyright>Copyright 2024</Copyright>
 		<PackageProjectUrl>https://github.com/rodrigobaia/terminal-vt100/</PackageProjectUrl>
 		<PackageIcon></PackageIcon>
@@ -18,7 +18,7 @@
 		<PackageTags>Start SendMessage ClearDisplay</PackageTags>
 		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
 		<PackageRequireLicenseAcceptance>True</PackageRequireLicenseAcceptance>
-		<Version>1.0.0.3</Version>
+		<Version>1.0.0.5</Version>
 	</PropertyGroup>
 
 	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">

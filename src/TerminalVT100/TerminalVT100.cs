@@ -24,7 +24,7 @@ namespace TerminalVT100
         private TcpListener _server;
         private int _portNumber;
         private ConcurrentDictionary<string, TcpClient> _connectedClients;
-        private ConcurrentDictionary<string, ClientState> _clientStates;
+        
         private CancellationTokenSource _cancellationTokenSource;
 
         /// <summary>
@@ -47,7 +47,6 @@ namespace TerminalVT100
         {
             InitializeLogger();
             _connectedClients = new ConcurrentDictionary<string, TcpClient>();
-            _clientStates = new ConcurrentDictionary<string, ClientState>();
         }
 
         private void InitializeLogger()
@@ -118,7 +117,6 @@ namespace TerminalVT100
             string clientIp = endPoint.Address.ToString();
 
             _connectedClients.TryAdd(clientIp, client);
-            _clientStates.TryAdd(clientIp, new ClientState());
             ClientConnected?.Invoke(clientIp);
 
             try
@@ -151,59 +149,7 @@ namespace TerminalVT100
                             }
 
                             string data = Encoding.ASCII.GetString(buffer, 0, bytesRead);
-                            var clientState = _clientStates[clientIp];
-
-                            if (Convert.ToChar(data) == (char)8)
-                            {
-                                if (string.IsNullOrEmpty(clientState.MessageBuilder.ToString()))
-                                {
-                                    continue;
-                                }
-                                var len = clientState.MessageBuilder.Length;
-                                var str = clientState.MessageBuilder.Remove(len - 1, 1);
-                                clientState.MessageBuilder = str;
-
-                                await SendMessageAsync(clientIp, ((char)8).ToString() + " " + ((char)8).ToString(), false);
-                                clientState.Column--;
-                                if (clientState.Column <= 0)
-                                {
-                                    clientState.Column = 0;
-                                }
-                                continue;
-                            }
-                            if (Convert.ToChar(data) == (char)127 || Convert.ToChar(data) == (char)27)
-                            {
-                                await PositionCursorAsync(clientIp);
-                                await SendMessageAsync(clientIp, "\x1B[H\x1B[J", false);
-                                clientState.Column = 0;
-                                continue;
-                            }
-
-                            clientState.MessageBuilder.Append(data);
-
-                            if (Convert.ToChar(data) == (char)13)
-                            {
-                                string receivedData = clientState.MessageBuilder.ToString().Replace("\r", "");
-                                ClientDataReceived?.Invoke(clientIp, receivedData);
-                                clientState.MessageBuilder.Clear();
-                                clientState.Row++;
-                                if (clientState.Row > 4)
-                                {
-                                    clientState.Row = 1;
-                                }
-                                clientState.Column = 0;
-                                continue;
-                            }
-                            clientState.Column++;
-
-                            if (clientState.Column > 20)
-                            {
-                                clientState.Column = 1;
-                                clientState.Row++;
-                            }
-
-                            await PositionCursorAsync(clientIp, clientState.Row, clientState.Column);
-                            await SendMessageAsync(clientIp, data, false);
+                            ClientDataReceived?.Invoke(clientIp, data);
                         }
                         catch (Exception ex)
                         {
@@ -292,13 +238,6 @@ namespace TerminalVT100
 
             try
             {
-                if (_clientStates.TryGetValue(ip, out ClientState clientState))
-                {
-                    clientState.MessageBuilder.Clear();
-                    clientState.Row = 1;
-                    clientState.Column = 1;
-                }
-
                 string message = $"{(char)27}[H{(char)27}[J";
                 byte[] data = Encoding.ASCII.GetBytes(message);
                 await client.GetStream().WriteAsync(data, 0, data.Length);

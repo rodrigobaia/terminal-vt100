@@ -5,7 +5,7 @@ namespace TerminalVT100
     /// <summary>
     /// Estado de digitação do Terminal
     /// </summary>
-    internal class ClientState
+    public class ClientState
     {
         /// <summary>
         /// Linha do Cursor do Terminal
