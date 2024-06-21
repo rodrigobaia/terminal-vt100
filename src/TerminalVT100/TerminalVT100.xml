@@ -24,6 +24,26 @@
             Message do Terminal
             </summary>
         </member>
+        <member name="T:TerminalVT100.TypeLog">
+            <summary>
+            Tipo de Log
+            </summary>
+        </member>
+        <member name="F:TerminalVT100.TypeLog.Info">
+            <summary>
+            INformatipo
+            </summary>
+        </member>
+        <member name="F:TerminalVT100.TypeLog.Warn">
+            <summary>
+            Atenção
+            </summary>
+        </member>
+        <member name="F:TerminalVT100.TypeLog.Error">
+            <summary>
+            Error
+            </summary>
+        </member>
         <member name="T:TerminalVT100.TedVT100Server">
             <summary>
             Servidor Terminal VT 100
@@ -43,6 +63,15 @@
             <summary>
             Construtor
             </summary>
+        </member>
+        <member name="M:TerminalVT100.TedVT100Server.SaveLog(System.String,System.String,TerminalVT100.TypeLog,System.Exception)">
+            <summary>
+            Gravar Log
+            </summary>
+            <param name="ip">IP do Terminal</param>
+            <param name="text">Texto</param>
+            <param name="typeLog">Tipo de Log</param>
+            <param name="ex">Exception quando for um erro</param>
         </member>
         <member name="M:TerminalVT100.TedVT100Server.Start(System.Int32)">
             <summary>

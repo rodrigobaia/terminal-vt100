@@ -16,15 +16,35 @@ using System.Threading;
 namespace TerminalVT100
 {
     /// <summary>
+    /// Tipo de Log
+    /// </summary>
+    public enum TypeLog
+    {
+        /// <summary>
+        /// INformatipo
+        /// </summary>
+        Info = 1,
+
+        /// <summary>
+        /// Atenção
+        /// </summary>
+        Warn,
+
+        /// <summary>
+        /// Error
+        /// </summary>
+        Error
+    }
+
+    /// <summary>
     /// Servidor Terminal VT 100
     /// </summary>
     public class TedVT100Server : IDisposable
     {
-        private ILogger _logger;
         private TcpListener _server;
         private int _portNumber;
         private ConcurrentDictionary<string, TcpClient> _connectedClients;
-        
+
         private CancellationTokenSource _cancellationTokenSource;
 
         /// <summary>
@@ -45,11 +65,17 @@ namespace TerminalVT100
         /// </summary>
         public TedVT100Server()
         {
-            InitializeLogger();
             _connectedClients = new ConcurrentDictionary<string, TcpClient>();
         }
 
-        private void InitializeLogger()
+        /// <summary>
+        /// Gravar Log
+        /// </summary>
+        /// <param name="ip">IP do Terminal</param>
+        /// <param name="text">Texto</param>
+        /// <param name="typeLog">Tipo de Log</param>
+        /// <param name="ex">Exception quando for um erro</param>
+        public void SaveLog(string ip, string text, TypeLog typeLog = TypeLog.Error, Exception ex = null)
         {
             var path = AppDomain.CurrentDomain.BaseDirectory;
             var pathLog = Path.Combine(path, "logs");
@@ -59,17 +85,30 @@ namespace TerminalVT100
                 Directory.CreateDirectory(pathLog);
             }
 
-            var fileFull = Path.Combine(pathLog, "terminal-vt100.log");
+            var fileFull = Path.Combine(pathLog, $"terminal-vt100-{ip.Replace(".", string.Empty)}-.log");
 
-            _logger = new LoggerConfiguration()
-                .MinimumLevel.Debug()
-                .WriteTo.File(fileFull, rollingInterval: RollingInterval.Day, outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}")
+            var _logger = new LoggerConfiguration()
+                 .MinimumLevel.Debug()
+                 .WriteTo.File(fileFull, rollingInterval: RollingInterval.Day, outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}")
 #if DEBUG
                 .WriteTo.Console(Serilog.Events.LogEventLevel.Verbose)
 #else
-                .WriteTo.Console(Serilog.Events.LogEventLevel.Error)
+                 .WriteTo.Console(Serilog.Events.LogEventLevel.Error)
 #endif
-                .CreateLogger();
+                 .CreateLogger();
+
+            switch (typeLog)
+            {
+                case TypeLog.Info:
+                    _logger.Information(text);
+                    break;
+                case TypeLog.Warn:
+                    _logger.Warning(text);
+                    break;
+                case TypeLog.Error:
+                    _logger.Error(ex, text);
+                    break;
+            }
         }
 
         /// <summary>
@@ -83,7 +122,7 @@ namespace TerminalVT100
 
             if (string.IsNullOrEmpty(ipCurrent))
             {
-                _logger.Error("Failed to determine current IP address. Server cannot start.");
+                SaveLog("localhost", "Failed to determine current IP address. Server cannot start.", TypeLog.Warn);
                 return;
             }
 
@@ -106,7 +145,7 @@ namespace TerminalVT100
                 }
                 catch (Exception ex)
                 {
-                    _logger.Error(ex, "AcceptClientsAsync");
+                    SaveLog("localhost", "AcceptClientsAsync", TypeLog.Error, ex);
                 }
             }
         }
@@ -138,13 +177,13 @@ namespace TerminalVT100
                             }
                             catch (Exception ex)
                             {
-                                _logger.Error(ex, "Error reading from client stream");
+                                SaveLog(clientIp, "Error reading from client stream", TypeLog.Error, ex);
                                 break;
                             }
 
                             if (bytesRead == 0) // Conexão foi fechada
                             {
-                                _logger.Warning($"Connection closed by client: {clientIp}");
+                                SaveLog(clientIp, "Connection closed by client.", TypeLog.Warn);
                                 break;
                             }
 
@@ -153,14 +192,14 @@ namespace TerminalVT100
                         }
                         catch (Exception ex)
                         {
-                            _logger.Error(ex, "Error handling client - while");
+                            SaveLog(clientIp, "Error handling client - while", TypeLog.Error, ex);
                         }
                     }
                 }
             }
             catch (Exception ex)
             {
-                _logger.Error(ex, "Error handling client.");
+                SaveLog(clientIp, "Error handling client.", TypeLog.Error, ex);
             }
             finally
             {
@@ -180,7 +219,7 @@ namespace TerminalVT100
             {
                 if (!_connectedClients.TryGetValue(ip, out TcpClient client))
                 {
-                    _logger.Warning($"GetTcpClientAsync - Client not found: {ip}. Attempting to connect.");
+                    SaveLog(ip, "GetTcpClientAsync - Client not found, Attempting to connect.", TypeLog.Warn);
 
                     try
                     {
@@ -190,15 +229,15 @@ namespace TerminalVT100
                         if (!_connectedClients.TryAdd(ip, client))
                         {
                             client.Close();
-                            _logger.Error($"GetTcpClientAsync - Failed to add new client to the list: {ip}");
+                            SaveLog(ip, "GetTcpClientAsync - Failed to add new client to the list.", TypeLog.Warn);
                             return null;
                         }
 
-                        _logger.Information($"GetTcpClientAsync - Successfully connected to new client: {ip}");
+                        SaveLog(ip, "GetTcpClientAsync - Successfully connected to new client.");
                     }
                     catch (Exception ex)
                     {
-                        _logger.Error(ex, $"GetTcpClientAsync - Error connecting to client: {ip}, Exception: {ex.Message}");
+                        SaveLog(ip, "GetTcpClientAsync - Error connecting to client", TypeLog.Error, ex);
                         throw;
                     }
                 }
@@ -207,7 +246,7 @@ namespace TerminalVT100
             }
             catch (Exception ex)
             {
-                _logger.Error(ex, "TedVT100Server - GetTcpClientAsync");
+                SaveLog(ip, "TedVT100Server - GetTcpClientAsync", TypeLog.Error, ex);
                 return null;
             }
         }
@@ -232,7 +271,7 @@ namespace TerminalVT100
 
             if (client == null)
             {
-                _logger.Warning($"ClearDisplayAsync - Client not found: {ip}");
+                SaveLog(ip, "ClearDisplayAsync - Client not found.", TypeLog.Warn);
                 return;
             }
 
@@ -245,7 +284,7 @@ namespace TerminalVT100
             }
             catch (Exception ex)
             {
-                _logger.Error(ex, $"Clear Display to client {ip}");
+                SaveLog(ip, $"Clear Display to client.", TypeLog.Error, ex);
             }
         }
 
@@ -273,7 +312,7 @@ namespace TerminalVT100
 
             if (client == null)
             {
-                _logger.Warning($"SendMessageAsync - Client not found: {ip}");
+                SaveLog(ip, "SendMessageAsync - Client not found", TypeLog.Warn);
                 return;
             }
 
@@ -291,7 +330,7 @@ namespace TerminalVT100
             }
             catch (Exception ex)
             {
-                _logger.Error(ex, $"Error sending message to client {ip}");
+                SaveLog(ip, "Error sending message to client.", TypeLog.Error, ex);
             }
         }
 
@@ -319,7 +358,7 @@ namespace TerminalVT100
 
             if (client == null)
             {
-                _logger.Warning($"PositionCursorAsync - Client not found: {ip}");
+                SaveLog(ip, "PositionCursorAsync - Client not found.", TypeLog.Warn);
                 return;
             }
 
@@ -331,7 +370,7 @@ namespace TerminalVT100
             }
             catch (Exception ex)
             {
-                _logger.Error(ex, $"Error position cursor to client {ip}");
+                SaveLog(ip, "Error position cursor to client", TypeLog.Error, ex);
 
             }
         }
@@ -358,7 +397,7 @@ namespace TerminalVT100
 
             if (client == null)
             {
-                _logger.Warning($"BeepAsync - Client not found: {ip}");
+                SaveLog(ip, "BeepAsync - Client not found.", TypeLog.Warn);
                 return;
             }
 
@@ -370,7 +409,7 @@ namespace TerminalVT100
             }
             catch (Exception ex)
             {
-                _logger.Error(ex, $"Error Beep to client {ip}");
+                SaveLog(ip, "Error Beep to client.", TypeLog.Error, ex);
 
             }
         }
@@ -392,7 +431,9 @@ namespace TerminalVT100
             }
             catch (Exception ex)
             {
-                _logger.Error(ex, "TedVT100 - BeepOffAsync");
+                IPEndPoint endPoint = (IPEndPoint)client.Client.RemoteEndPoint;
+                string clientIp = endPoint.Address.ToString();
+                SaveLog(clientIp, "TedVT100 - BeepOffAsync", TypeLog.Error, ex);
             }
         }
 
@@ -414,7 +455,9 @@ namespace TerminalVT100
             }
             catch (Exception ex)
             {
-                _logger.Error(ex, "TedVT100 - BeepOnAsync");
+                IPEndPoint endPoint = (IPEndPoint)client.Client.RemoteEndPoint;
+                string clientIp = endPoint.Address.ToString();
+                SaveLog(clientIp, "TedVT100 - BeepOnAsync", TypeLog.Error, ex);
             }
         }
 
@@ -438,7 +481,7 @@ namespace TerminalVT100
 
             if (client == null)
             {
-                _logger.Warning($"EnabledCOM1Async - Client not found: {ip}");
+                SaveLog(ip, "EnabledCOM1Async - Client not found.", TypeLog.Warn);
                 return;
             }
 
@@ -450,7 +493,7 @@ namespace TerminalVT100
             }
             catch (Exception ex)
             {
-                _logger.Error(ex, $"Error Enable Port Com 1 to client {ip}");
+                SaveLog(ip, "Error Enable Port Com 1 to client.", TypeLog.Error, ex);
             }
         }
 
@@ -474,7 +517,7 @@ namespace TerminalVT100
 
             if (client == null)
             {
-                _logger.Warning($"EnabledCOM2Async - Client not found: {ip}");
+                SaveLog(ip, "EnabledCOM2Async - Client not found.", TypeLog.Warn);
                 return;
             }
 
@@ -486,7 +529,7 @@ namespace TerminalVT100
             }
             catch (Exception ex)
             {
-                _logger.Error(ex, $"Error Enable Port Com 2 to client {ip}");
+                SaveLog(ip, "Error Enable Port Com 2 to client.", TypeLog.Error, ex);
             }
         }
 
@@ -511,7 +554,7 @@ namespace TerminalVT100
                 {
                     _server?.Stop();
                     _isRunning = false;
-                    
+
                     foreach (var client in _connectedClients.Values)
                     {
                         client.Close();

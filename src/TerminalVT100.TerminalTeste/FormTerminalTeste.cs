@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Windows.Forms;
 
 namespace TerminalVT100.TerminalTeste
@@ -54,8 +55,10 @@ namespace TerminalVT100.TerminalTeste
         private void TedVT100Service_ClientConnected(string ip)
         {
             TedVT100Service.ClearDisplay(ip);
+            TedVT100Service.SaveLog(ip,"Conectado", TypeLog.Info);
             if (!_ips.Where(x => x == ip).Any())
             {
+                Thread.Sleep(300);
                 _ips.Add(ip);
                 this.Invoke((MethodInvoker)delegate ()
                 {
