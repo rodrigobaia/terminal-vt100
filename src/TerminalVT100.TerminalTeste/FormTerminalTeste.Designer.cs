@@ -146,9 +146,9 @@
             // 
             this.richTextBox1.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
             | System.Windows.Forms.AnchorStyles.Right)));
-            this.richTextBox1.Location = new System.Drawing.Point(556, 104);
+            this.richTextBox1.Location = new System.Drawing.Point(554, 104);
             this.richTextBox1.Name = "richTextBox1";
-            this.richTextBox1.Size = new System.Drawing.Size(339, 401);
+            this.richTextBox1.Size = new System.Drawing.Size(399, 401);
             this.richTextBox1.TabIndex = 30;
             this.richTextBox1.Text = "";
             // 
@@ -157,7 +157,7 @@
             this.label3.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
             this.label3.AutoSize = true;
             this.label3.Font = new System.Drawing.Font("Microsoft Sans Serif", 7.8F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.label3.Location = new System.Drawing.Point(553, 84);
+            this.label3.Location = new System.Drawing.Point(611, 84);
             this.label3.Name = "label3";
             this.label3.Size = new System.Drawing.Size(109, 16);
             this.label3.TabIndex = 29;
@@ -203,7 +203,7 @@
             this.TxtError.Multiline = true;
             this.TxtError.Name = "TxtError";
             this.TxtError.ScrollBars = System.Windows.Forms.ScrollBars.Vertical;
-            this.TxtError.Size = new System.Drawing.Size(906, 134);
+            this.TxtError.Size = new System.Drawing.Size(964, 134);
             this.TxtError.TabIndex = 34;
             // 
             // LblCount
@@ -232,7 +232,7 @@
             this.label5.Font = new System.Drawing.Font("Microsoft Sans Serif", 16F, ((System.Drawing.FontStyle)((System.Drawing.FontStyle.Bold | System.Drawing.FontStyle.Underline))), System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.label5.Location = new System.Drawing.Point(-6, 31);
             this.label5.Name = "label5";
-            this.label5.Size = new System.Drawing.Size(906, 53);
+            this.label5.Size = new System.Drawing.Size(964, 53);
             this.label5.TabIndex = 37;
             this.label5.Text = "TESTA TERMINAL TCP - VT100";
             this.label5.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
@@ -309,7 +309,7 @@
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(8F, 16F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(906, 649);
+            this.ClientSize = new System.Drawing.Size(964, 649);
             this.Controls.Add(this.label7);
             this.Controls.Add(this.textBox1);
             this.Controls.Add(this.BtnBeep);

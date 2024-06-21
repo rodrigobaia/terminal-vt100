@@ -40,6 +40,9 @@ namespace TerminalVT100.TerminalTeste
 
         private void BtnConectar_Click(object sender, EventArgs e)
         {
+            TxtError.Text = string.Empty;
+            richTextBox1.Text = string.Empty;
+
             BtnConectar.Enabled = false;
             BtnDesconectar.Enabled = true;
 
@@ -153,6 +156,7 @@ namespace TerminalVT100.TerminalTeste
             BtnDesconectar.Enabled = false;
             BtnConectar.Enabled = true;
 
+            TedVT100Service.Stop();
             TedVT100Service.Dispose();
             BtnConectar.Focus();
             CboTerminais.DataSource = null;

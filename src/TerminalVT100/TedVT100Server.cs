@@ -12,6 +12,7 @@ using System.Threading.Tasks;
 using System.Linq;
 using Serilog;
 using System.Threading;
+using Serilog.Core;
 
 namespace TerminalVT100
 {
@@ -43,10 +44,10 @@ namespace TerminalVT100
     {
         private TcpListener _server;
         private int _portNumber;
+        SemaphoreSlim _semaphore = new SemaphoreSlim(100, 100);
+
         private ConcurrentDictionary<string, TcpClient> _connectedClients;
-
-        private CancellationTokenSource _cancellationTokenSource;
-
+        
         /// <summary>
         /// Evento que informa a existe de dados enviados pelo o Terminal para o servidor TEDVT100
         /// </summary>
@@ -122,44 +123,74 @@ namespace TerminalVT100
 
             if (string.IsNullOrEmpty(ipCurrent))
             {
-                SaveLog("localhost", "Failed to determine current IP address. Server cannot start.", TypeLog.Warn);
+                SaveLog("127.0.0.1", "Failed to determine current IP address. Server cannot start.", TypeLog.Warn);
                 return;
             }
 
             _server = new TcpListener(IPAddress.Parse(ipCurrent), _portNumber);
             _server.Start();
 
-            _cancellationTokenSource = new CancellationTokenSource();
             _isRunning = true;
-            Task.Run(() => AcceptClientsAsync(_cancellationTokenSource.Token));
+            Task.Run(() => AcceptClientsAsync(CancellationToken.None));
         }
 
         private async Task AcceptClientsAsync(CancellationToken cancellationToken)
         {
-            while (!cancellationToken.IsCancellationRequested && _isRunning)
+            while (!cancellationToken.IsCancellationRequested)
             {
+                if (!_isRunning)
+                {
+                    // Se o servidor não está rodando, espere um pouco antes de tentar novamente.
+                    SaveLog(BuscarIpCorrente(), "Servidor não está rodando, espere um pouco antes de tentar novamente.", TypeLog.Warn);
+                    await Task.Delay(100, cancellationToken);
+                    continue;
+                }
+
+                TcpClient client = null;
                 try
                 {
-                    TcpClient client = await _server.AcceptTcpClientAsync();
+                    await _semaphore.WaitAsync(cancellationToken); // Espera se o número máximo de dispositivos foi alcançado
+                    client = await _server.AcceptTcpClientAsync();
                     Task.Run(() => HandleClientAsync(client));
                 }
                 catch (Exception ex)
                 {
-                    SaveLog("localhost", "AcceptClientsAsync", TypeLog.Error, ex);
+                    SaveLog(BuscarIpCorrente(), "AcceptClientsAsync", TypeLog.Error, ex);
+                    // Aguarde um pouco antes de tentar aceitar um novo cliente em caso de erro.
+                    await Task.Delay(100);
                 }
             }
         }
 
+        /// <summary>
+        /// Para o servidor
+        /// </summary>
+        public void Stop()
+        {
+            _isRunning = false;
+            Task.Delay(200);
+            _server.Stop();
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="client"></param>
+        /// <returns></returns>
         private async Task HandleClientAsync(TcpClient client)
         {
             IPEndPoint endPoint = (IPEndPoint)client.Client.RemoteEndPoint;
             string clientIp = endPoint.Address.ToString();
 
-            _connectedClients.TryAdd(clientIp, client);
-            ClientConnected?.Invoke(clientIp);
+            if (_connectedClients.TryAdd(clientIp, client))
+            {
+                ClientConnected?.Invoke(clientIp);
+            }
 
             try
             {
+                await _semaphore.WaitAsync();
+
                 using (NetworkStream stream = client.GetStream())
                 {
                     int bufferSize = client.ReceiveBufferSize;
@@ -175,7 +206,7 @@ namespace TerminalVT100
                             {
                                 bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length);
                             }
-                            catch (Exception ex)
+                            catch (IOException ex)
                             {
                                 SaveLog(clientIp, "Error reading from client stream", TypeLog.Error, ex);
                                 break;
@@ -196,7 +227,7 @@ namespace TerminalVT100
                         }
                     }
                 }
-            }
+            }            
             catch (Exception ex)
             {
                 SaveLog(clientIp, "Error handling client.", TypeLog.Error, ex);

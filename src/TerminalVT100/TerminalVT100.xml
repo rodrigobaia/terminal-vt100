@@ -79,6 +79,18 @@
             </summary>
             <param name="portNumber"></param>
         </member>
+        <member name="M:TerminalVT100.TedVT100Server.Stop">
+            <summary>
+            Para o servidor
+            </summary>
+        </member>
+        <member name="M:TerminalVT100.TedVT100Server.HandleClientAsync(System.Net.Sockets.TcpClient)">
+            <summary>
+            
+            </summary>
+            <param name="client"></param>
+            <returns></returns>
+        </member>
         <member name="M:TerminalVT100.TedVT100Server.GetTcpClientAsync(System.String)">
             <summary>
             Busca Client para envio de dados
