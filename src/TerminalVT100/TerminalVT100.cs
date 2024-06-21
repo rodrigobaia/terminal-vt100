@@ -25,6 +25,7 @@ namespace TerminalVT100
         private int _portNumber;
         private ConcurrentDictionary<string, TcpClient> _connectedClients;
         private ConcurrentDictionary<string, ClientState> _clientStates;
+        private CancellationTokenSource _cancellationTokenSource;
 
         /// <summary>
         /// Evento que informa a existe de dados enviados pelo o Terminal para o servidor TEDVT100
@@ -90,13 +91,14 @@ namespace TerminalVT100
             _server = new TcpListener(IPAddress.Parse(ipCurrent), _portNumber);
             _server.Start();
 
+            _cancellationTokenSource = new CancellationTokenSource();
             _isRunning = true;
-            Task.Run(() => AcceptClientsAsync());
+            Task.Run(() => AcceptClientsAsync(_cancellationTokenSource.Token));
         }
 
-        private async Task AcceptClientsAsync()
+        private async Task AcceptClientsAsync(CancellationToken cancellationToken)
         {
-            while (_isRunning)
+            while (!cancellationToken.IsCancellationRequested && _isRunning)
             {
                 try
                 {

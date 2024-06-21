@@ -194,15 +194,5 @@
             <param name="ipAddress">O endereço IP a ser verificado.</param>
             <returns>True se há conexão com a internet, caso contrário, False.</returns>
         </member>
-        <member name="P:TerminalVT100.TedVT100Server.Row">
-            <summary>
-            Linha do Cursor
-            </summary>
-        </member>
-        <member name="P:TerminalVT100.TedVT100Server.Column">
-            <summary>
-            Coluna Cursor
-            </summary>
-        </member>
     </members>
 </doc>
