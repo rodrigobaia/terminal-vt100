@@ -18,7 +18,7 @@
 		<PackageTags>Start SendMessage ClearDisplay</PackageTags>
 		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
 		<PackageRequireLicenseAcceptance>True</PackageRequireLicenseAcceptance>
-		<Version>1.0.0.5</Version>
+		<Version>1.0.0.6</Version>
 	</PropertyGroup>
 
 	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
