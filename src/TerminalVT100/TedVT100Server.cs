@@ -85,11 +85,11 @@ namespace TerminalVT100
                 Directory.CreateDirectory(pathLog);
             }
 
-            var fileFull = Path.Combine(pathLog, $"terminal-vt100-{ip.Replace(".", string.Empty)}-.log");
+            var fileFull = Path.Combine(pathLog, $"terminal-vt100-{ip.Replace(".", string.Empty)}-{DateTime.Now:yyyy-MM-dd}.log");
 
             var _logger = new LoggerConfiguration()
                  .MinimumLevel.Debug()
-                 .WriteTo.File(fileFull, rollingInterval: RollingInterval.Day, outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}")
+                 .WriteTo.File(fileFull, outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}")
 #if DEBUG
                 .WriteTo.Console(Serilog.Events.LogEventLevel.Verbose)
 #else
