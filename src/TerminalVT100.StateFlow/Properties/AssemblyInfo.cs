@@ -5,11 +5,11 @@ using System.Runtime.InteropServices;
 // General Information about an assembly is controlled through the following
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
-[assembly: AssemblyTitle("TerminalVT100")]
+[assembly: AssemblyTitle("TerminalVT100.StateFlow")]
 [assembly: AssemblyDescription("")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("")]
-[assembly: AssemblyProduct("TerminalVT100")]
+[assembly: AssemblyProduct("TerminalVT100.StateFlow")]
 [assembly: AssemblyCopyright("Copyright ©  2024")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
@@ -20,7 +20,7 @@ using System.Runtime.InteropServices;
 [assembly: ComVisible(false)]
 
 // The following GUID is for the ID of the typelib if this project is exposed to COM
-[assembly: Guid("386f71c1-63b9-4007-b528-027108cc4af7")]
+[assembly: Guid("b06785d5-2a84-4c27-9d4e-f03cc23a3c08")]
 
 // Version information for an assembly consists of the following four values:
 //

@@ -1,29 +1,51 @@
-﻿using Serilog;
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.Linq;
-using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
-using System.Text;
+using System.Net;
 using System.Text.RegularExpressions;
+using System.Text;
 using System.Threading.Tasks;
+using System.Linq;
+using Serilog;
+using System.Threading;
 
 namespace TerminalVT100
 {
+    /// <summary>
+    /// Tipo de Log
+    /// </summary>
+    public enum TypeLog
+    {
+        /// <summary>
+        /// INformatipo
+        /// </summary>
+        Info = 1,
+
+        /// <summary>
+        /// Atenção
+        /// </summary>
+        Warn,
+
+        /// <summary>
+        /// Error
+        /// </summary>
+        Error
+    }
+
     /// <summary>
     /// Servidor Terminal VT 100
     /// </summary>
     public class TedVT100Server : IDisposable
     {
-        private ILogger _logger;
         private TcpListener _server;
         private int _portNumber;
         private ConcurrentDictionary<string, TcpClient> _connectedClients;
-        private ConcurrentDictionary<string, StringBuilder> _receiveDatas;
+
+        private CancellationTokenSource _cancellationTokenSource;
 
         /// <summary>
         /// Evento que informa a existe de dados enviados pelo o Terminal para o servidor TEDVT100
@@ -36,17 +58,24 @@ namespace TerminalVT100
         public event Action<string> ClientConnected;
 
         private bool _disposed = false;
+        private bool _isRunning = false;
 
         /// <summary>
         /// Construtor
         /// </summary>
         public TedVT100Server()
         {
-            InitializeLogger();
             _connectedClients = new ConcurrentDictionary<string, TcpClient>();
         }
 
-        private void InitializeLogger()
+        /// <summary>
+        /// Gravar Log
+        /// </summary>
+        /// <param name="ip">IP do Terminal</param>
+        /// <param name="text">Texto</param>
+        /// <param name="typeLog">Tipo de Log</param>
+        /// <param name="ex">Exception quando for um erro</param>
+        public void SaveLog(string ip, string text, TypeLog typeLog = TypeLog.Error, Exception ex = null)
         {
             var path = AppDomain.CurrentDomain.BaseDirectory;
             var pathLog = Path.Combine(path, "logs");
@@ -56,17 +85,30 @@ namespace TerminalVT100
                 Directory.CreateDirectory(pathLog);
             }
 
-            var fileFull = Path.Combine(pathLog, "terminal-vt100.log");
+            var fileFull = Path.Combine(pathLog, $"terminal-vt100-{ip.Replace(".", string.Empty)}-.log");
 
-            _logger = new LoggerConfiguration()
-                .MinimumLevel.Debug()
-                .WriteTo.File(fileFull, rollingInterval: RollingInterval.Day, outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}")
+            var _logger = new LoggerConfiguration()
+                 .MinimumLevel.Debug()
+                 .WriteTo.File(fileFull, rollingInterval: RollingInterval.Day, outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}")
 #if DEBUG
                 .WriteTo.Console(Serilog.Events.LogEventLevel.Verbose)
 #else
-                .WriteTo.Console(Serilog.Events.LogEventLevel.Error)
+                 .WriteTo.Console(Serilog.Events.LogEventLevel.Error)
 #endif
-                .CreateLogger();
+                 .CreateLogger();
+
+            switch (typeLog)
+            {
+                case TypeLog.Info:
+                    _logger.Information(text);
+                    break;
+                case TypeLog.Warn:
+                    _logger.Warning(text);
+                    break;
+                case TypeLog.Error:
+                    _logger.Error(ex, text);
+                    break;
+            }
         }
 
         /// <summary>
@@ -80,19 +122,21 @@ namespace TerminalVT100
 
             if (string.IsNullOrEmpty(ipCurrent))
             {
-                _logger.Error("Failed to determine current IP address. Server cannot start.");
+                SaveLog("localhost", "Failed to determine current IP address. Server cannot start.", TypeLog.Warn);
                 return;
             }
 
             _server = new TcpListener(IPAddress.Parse(ipCurrent), _portNumber);
             _server.Start();
 
-            Task.Run(() => AcceptClientsAsync());
+            _cancellationTokenSource = new CancellationTokenSource();
+            _isRunning = true;
+            Task.Run(() => AcceptClientsAsync(_cancellationTokenSource.Token));
         }
 
-        private async Task AcceptClientsAsync()
+        private async Task AcceptClientsAsync(CancellationToken cancellationToken)
         {
-            while (true)
+            while (!cancellationToken.IsCancellationRequested && _isRunning)
             {
                 try
                 {
@@ -101,7 +145,7 @@ namespace TerminalVT100
                 }
                 catch (Exception ex)
                 {
-                    _logger.Error(ex, "AcceptClientsAsync");
+                    SaveLog("localhost", "AcceptClientsAsync", TypeLog.Error, ex);
                 }
             }
         }
@@ -118,38 +162,44 @@ namespace TerminalVT100
             {
                 using (NetworkStream stream = client.GetStream())
                 {
-                    byte[] buffer = new byte[1024];
-                    StringBuilder messageBuilder = new StringBuilder();
+                    int bufferSize = client.ReceiveBufferSize;
+                    byte[] buffer = new byte[bufferSize];
 
-                    while (true)
+                    while (_isRunning)
                     {
-                        int bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length);
-                        if (bytesRead == 0)
-                            break;
-
-                        string data = Encoding.ASCII.GetString(buffer, 0, bytesRead);
-                        messageBuilder.Append(data);
-
-                        if (_receiveDatas == null)
+                        try
                         {
-                            _receiveDatas = new ConcurrentDictionary<string, StringBuilder>();
+                            int bytesRead = 0;
+
+                            try
+                            {
+                                bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length);
+                            }
+                            catch (Exception ex)
+                            {
+                                SaveLog(clientIp, "Error reading from client stream", TypeLog.Error, ex);
+                                break;
+                            }
+
+                            if (bytesRead == 0) // Conexão foi fechada
+                            {
+                                SaveLog(clientIp, "Connection closed by client.", TypeLog.Warn);
+                                break;
+                            }
+
+                            string data = Encoding.ASCII.GetString(buffer, 0, bytesRead);
+                            ClientDataReceived?.Invoke(clientIp, data);
                         }
-
-                        _receiveDatas[clientIp] = messageBuilder;
-
-                        await SendMessageAsync(clientIp, data, false);
-                        if (data.Contains("\r"))
+                        catch (Exception ex)
                         {
-                            string receivedData = _receiveDatas[clientIp].ToString().Replace("\r", "");
-                            ClientDataReceived?.Invoke(clientIp, receivedData);
-                            break;
+                            SaveLog(clientIp, "Error handling client - while", TypeLog.Error, ex);
                         }
                     }
                 }
             }
             catch (Exception ex)
             {
-                _logger.Error(ex, "Error handling client.");
+                SaveLog(clientIp, "Error handling client.", TypeLog.Error, ex);
             }
             finally
             {
@@ -159,14 +209,46 @@ namespace TerminalVT100
         }
 
         /// <summary>
-        /// Enviar Mensagem
+        /// Busca Client para envio de dados
         /// </summary>
-        // <param name="ip">IP do Terminal</param>
-        /// <param name="message">Mensagem a ser enviada</param>
-        /// <param name="breakLine">Informa se é para quebrar linha no fim da mensagem</param>
-        public async void SendMessage(string ip, string message, bool breakLine = true)
+        /// <param name="ip">IP do Terminal</param>
+        /// <returns></returns>
+        private async Task<TcpClient> GetTcpClientAsync(string ip)
         {
-            SendMessageAsync(ip, message, breakLine);
+            try
+            {
+                if (!_connectedClients.TryGetValue(ip, out TcpClient client))
+                {
+                    SaveLog(ip, "GetTcpClientAsync - Client not found, Attempting to connect.", TypeLog.Warn);
+
+                    try
+                    {
+                        client = new TcpClient();
+                        await client.ConnectAsync(ip, _portNumber);
+
+                        if (!_connectedClients.TryAdd(ip, client))
+                        {
+                            client.Close();
+                            SaveLog(ip, "GetTcpClientAsync - Failed to add new client to the list.", TypeLog.Warn);
+                            return null;
+                        }
+
+                        SaveLog(ip, "GetTcpClientAsync - Successfully connected to new client.");
+                    }
+                    catch (Exception ex)
+                    {
+                        SaveLog(ip, "GetTcpClientAsync - Error connecting to client", TypeLog.Error, ex);
+                        throw;
+                    }
+                }
+
+                return client;
+            }
+            catch (Exception ex)
+            {
+                SaveLog(ip, "TedVT100Server - GetTcpClientAsync", TypeLog.Error, ex);
+                return null;
+            }
         }
 
         /// <summary>
@@ -175,7 +257,7 @@ namespace TerminalVT100
         // <param name="ip">IP do Terminal</param>
         public void ClearDisplay(string ip)
         {
-            ClearDisplayAsync(ip);
+            Task.Run(() => ClearDisplayAsync(ip));
         }
 
         /// <summary>
@@ -185,9 +267,11 @@ namespace TerminalVT100
         /// <returns></returns>
         public async Task ClearDisplayAsync(string ip)
         {
-            if (!_connectedClients.TryGetValue(ip, out TcpClient client))
+            var client = await GetTcpClientAsync(ip);
+
+            if (client == null)
             {
-                _logger.Warning($"Client not found: {ip}");
+                SaveLog(ip, "ClearDisplayAsync - Client not found.", TypeLog.Warn);
                 return;
             }
 
@@ -196,42 +280,184 @@ namespace TerminalVT100
                 string message = $"{(char)27}[H{(char)27}[J";
                 byte[] data = Encoding.ASCII.GetBytes(message);
                 await client.GetStream().WriteAsync(data, 0, data.Length);
+                await PositionCursorAsync(ip);
             }
             catch (Exception ex)
             {
-                _logger.Error(ex, $"Clear Display to client {ip}");
+                SaveLog(ip, $"Clear Display to client.", TypeLog.Error, ex);
             }
+        }
+
+        /// <summary>
+        /// Enviar Mensagem
+        /// </summary>
+        /// <param name="ip">IP do Terminal</param>
+        /// <param name="message">Mensagem a ser enviada</param>
+        /// <param name="breakLine">Informa se é para quebrar linha no fim da mensagem</param>
+        public void SendMessage(string ip, string message, bool breakLine = true)
+        {
+            Task.Run(() => SendMessageAsync(ip, message, breakLine));
         }
 
         /// <summary>
         /// Envia mensagem para o Terminal
         /// </summary>
-        // <param name="ip">IP do Terminal</param>
+        /// <param name="ip">IP do Terminal</param>
         /// <param name="message">Mensagem a ser enviada</param>
         /// <param name="breakLine">Informa se é para quebrar linha no fim da mensagem</param>
         /// <returns></returns>
-        public async Task SendMessageAsync(string ip, string message, bool breakLine = true)
+        public async Task SendMessageAsync(string ip, string message, bool breakLine = false)
         {
-            if (!_connectedClients.TryGetValue(ip, out TcpClient client))
+            var client = await GetTcpClientAsync(ip);
+
+            if (client == null)
             {
-                _logger.Warning($"Client not found: {ip}");
+                SaveLog(ip, "SendMessageAsync - Client not found", TypeLog.Warn);
                 return;
             }
 
             try
             {
+
                 if (breakLine)
                 {
                     // Adiciona uma quebra de linha ao final da mensagem
                     message += "\r\n";  // Ou apenas "\n" dependendo do requisito VT100
                 }
 
+                var data = Encoding.ASCII.GetBytes(message);
+                await client.GetStream().WriteAsync(data, 0, data.Length);
+            }
+            catch (Exception ex)
+            {
+                SaveLog(ip, "Error sending message to client.", TypeLog.Error, ex);
+            }
+        }
+
+        /// <summary>
+        /// Posição do Curor
+        /// </summary>
+        /// <param name="ip">IP do Terminal</param>
+        /// <param name="row">Numero da Linha</param>
+        /// <param name="column">Número da Coluna</param>
+        public void PositionCursor(string ip, int row = 1, int column = 1)
+        {
+            Task.Run(() => PositionCursorAsync(ip, row, column));
+        }
+
+        /// <summary>
+        /// Posição do Curor
+        /// </summary>
+        /// <param name="ip">IP do Terminal</param>
+        /// <param name="row">Numero da Linha</param>
+        /// <param name="column">Número da Coluna</param>
+        /// <returns></returns>
+        public async Task PositionCursorAsync(string ip, int row = 1, int column = 1)
+        {
+            var client = await GetTcpClientAsync(ip);
+
+            if (client == null)
+            {
+                SaveLog(ip, "PositionCursorAsync - Client not found.", TypeLog.Warn);
+                return;
+            }
+
+            try
+            {
+                string message = $"\x1B[{row};{column}H";
+                var data = Encoding.ASCII.GetBytes(message);
+                await client.GetStream().WriteAsync(data, 0, data.Length);
+            }
+            catch (Exception ex)
+            {
+                SaveLog(ip, "Error position cursor to client", TypeLog.Error, ex);
+
+            }
+        }
+
+        /// <summary>
+        /// Enviar Beep para o Terminal
+        /// </summary>
+        /// <param name="ip">IP do Terminal</param>
+        /// <param name="timeBeep">Tem po em Milisegundos de duração do Beep</param>
+        public void Beep(string ip, int timeBeep = 600)
+        {
+            Task.Run(() => BeepAsync(ip, timeBeep));
+        }
+
+        /// <summary>
+        /// Enviar Beep para o Terminal
+        /// </summary>
+        /// <param name="ip">IP do Terminal</param>
+        /// <param name="timeBeep">Tem po em Milisegundos de duração do Beep</param>
+        /// <returns></returns>
+        public async Task BeepAsync(string ip, int timeBeep = 600)
+        {
+            var client = await GetTcpClientAsync(ip);
+
+            if (client == null)
+            {
+                SaveLog(ip, "BeepAsync - Client not found.", TypeLog.Warn);
+                return;
+            }
+
+            try
+            {
+                await BeepOnAsync(client);
+                Thread.Sleep(timeBeep);
+                await BeepOffAsync(client);
+            }
+            catch (Exception ex)
+            {
+                SaveLog(ip, "Error Beep to client.", TypeLog.Error, ex);
+
+            }
+        }
+
+        /// <summary>
+        /// Desliga o Beep
+        /// </summary>
+        /// <param name="client"></param>
+        /// <returns></returns>
+        private async Task BeepOffAsync(TcpClient client)
+        {
+            try
+            {
+                // Buzzer
+                var acionamentoChar = (char)11;
+                var message = $"{(char)27}[?24c{(char)27}[5i{acionamentoChar}{(char)27}[4i";
                 byte[] data = Encoding.ASCII.GetBytes(message);
                 await client.GetStream().WriteAsync(data, 0, data.Length);
             }
             catch (Exception ex)
             {
-                _logger.Error(ex, $"Error sending message to client {ip}");
+                IPEndPoint endPoint = (IPEndPoint)client.Client.RemoteEndPoint;
+                string clientIp = endPoint.Address.ToString();
+                SaveLog(clientIp, "TedVT100 - BeepOffAsync", TypeLog.Error, ex);
+            }
+        }
+
+        /// <summary>
+        /// Liga o Beep
+        /// </summary>
+        /// <param name="client"></param>
+        /// <returns></returns>
+        private async Task BeepOnAsync(TcpClient client)
+        {
+            try
+            {
+                // Buzzer
+                var acionamentoChar = (char)7;
+                var message = $"{(char)27}[?24c{(char)27}[5i{acionamentoChar}{(char)27}[4i";
+                byte[] data = Encoding.ASCII.GetBytes(message);
+                await client.GetStream().WriteAsync(data, 0, data.Length);
+
+            }
+            catch (Exception ex)
+            {
+                IPEndPoint endPoint = (IPEndPoint)client.Client.RemoteEndPoint;
+                string clientIp = endPoint.Address.ToString();
+                SaveLog(clientIp, "TedVT100 - BeepOnAsync", TypeLog.Error, ex);
             }
         }
 
@@ -247,13 +473,15 @@ namespace TerminalVT100
         /// <summary>
         /// /// Habilitar porta COM 1
         /// </summary>
-        // <param name="ip">IP do Terminal</param>
+        /// <param name="ip">IP do Terminal</param>
         /// <returns></returns>
         public async Task EnabledCOM1Async(string ip)
         {
-            if (!_connectedClients.TryGetValue(ip, out TcpClient client))
+            var client = await GetTcpClientAsync(ip);
+
+            if (client == null)
             {
-                _logger.Warning($"Client not found: {ip}");
+                SaveLog(ip, "EnabledCOM1Async - Client not found.", TypeLog.Warn);
                 return;
             }
 
@@ -265,14 +493,14 @@ namespace TerminalVT100
             }
             catch (Exception ex)
             {
-                _logger.Error(ex, $"Error Enable Port Com 1 to client {ip}");
+                SaveLog(ip, "Error Enable Port Com 1 to client.", TypeLog.Error, ex);
             }
         }
 
         /// <summary>
         /// Habilitar porta COM 2
         /// </summary>
-        // <param name="ip">IP do Terminal</param>
+        /// <param name="ip">IP do Terminal</param>
         public void EnabledCOM2(string ip)
         {
             EnabledCOM2Async(ip);
@@ -281,13 +509,15 @@ namespace TerminalVT100
         /// <summary>
         /// Habilitar porta COM 2
         /// </summary>
-        // <param name="ip">IP do Terminal</param>
+        /// <param name="ip">IP do Terminal</param>
         /// <returns></returns>
         public async Task EnabledCOM2Async(string ip)
         {
-            if (!_connectedClients.TryGetValue(ip, out TcpClient client))
+            var client = await GetTcpClientAsync(ip);
+
+            if (client == null)
             {
-                _logger.Warning($"Client not found: {ip}");
+                SaveLog(ip, "EnabledCOM2Async - Client not found.", TypeLog.Warn);
                 return;
             }
 
@@ -299,7 +529,7 @@ namespace TerminalVT100
             }
             catch (Exception ex)
             {
-                _logger.Error(ex, $"Error Enable Port Com 2 to client {ip}");
+                SaveLog(ip, "Error Enable Port Com 2 to client.", TypeLog.Error, ex);
             }
         }
 
@@ -322,7 +552,9 @@ namespace TerminalVT100
             {
                 if (disposing)
                 {
-                    _server.Stop();
+                    _server?.Stop();
+                    _isRunning = false;
+
                     foreach (var client in _connectedClients.Values)
                     {
                         client.Close();
@@ -444,5 +676,6 @@ namespace TerminalVT100
                 return false;
             }
         }
+
     }
 }
